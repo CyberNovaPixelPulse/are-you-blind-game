@@ -6,6 +6,10 @@ import { supabase } from "@/lib/supabase";
 
 const AD_SECONDS = 5;
 
+type AdsWindow = Window & {
+  adsbygoogle?: Record<string, unknown>[];
+};
+
 export function usePlayerVip() {
   const [isVip, setIsVip] = useState(false);
   const [vipReady, setVipReady] = useState(false);
@@ -44,6 +48,7 @@ export function AdModal({ open, onComplete }: { open: boolean; onComplete: () =>
   const [mounted, setMounted] = useState(false);
   const onCompleteRef = useRef(onComplete);
   const doneRef = useRef(false);
+  const adRequested = useRef(false);
   onCompleteRef.current = onComplete;
 
   useEffect(() => {
@@ -69,6 +74,21 @@ export function AdModal({ open, onComplete }: { open: boolean; onComplete: () =>
     }, 200);
     return () => window.clearInterval(timer);
   }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      adRequested.current = false;
+      return;
+    }
+    if (!mounted || adRequested.current) return;
+    adRequested.current = true;
+    try {
+      const adsWindow = window as AdsWindow;
+      (adsWindow.adsbygoogle = adsWindow.adsbygoogle || []).push({});
+    } catch {
+      adRequested.current = false;
+    }
+  }, [open, mounted]);
 
   function finish() {
     if (seconds > 0 || doneRef.current) return;
@@ -96,8 +116,13 @@ export function AdModal({ open, onComplete }: { open: boolean; onComplete: () =>
           onClick={(event) => event.stopPropagation()}
         >
           <p className="text-xs font-bold tracking-[0.22em] text-amber-300">AD</p>
-          <div className="mt-3 flex aspect-video items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#3f3f46,#18181b_55%,#7f1d1d)]">
-            <span className="rounded-full bg-black/40 px-3 py-1 text-sm font-semibold">廣告版位</span>
+          <div className="mt-3 flex justify-center">
+            <ins
+              className="adsbygoogle"
+              style={{ display: "inline-block", width: 300, height: 250 }}
+              data-ad-client="ca-pub-5637115871659505"
+              data-ad-slot="7960686345"
+            />
           </div>
           <h2 id="ad-modal-title" className="mt-4 text-lg font-black">
             贊助展示
