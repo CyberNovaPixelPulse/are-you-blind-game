@@ -1,52 +1,107 @@
-import { drawFromDatabase, type DrawResult } from "@/lib/question-draw";
-import { readSeenIds, rememberSeen, writeSeenIds } from "@/lib/seen-questions";
+import { drawFromDatabase, drawManyFromDatabase, type BatchDrawResult, type DrawResult, type DrawnQuestion } from "@/lib/question-draw";
+import { isQuestionId, readSeenIds, rememberSeen, writeSeenIds } from "@/lib/seen-questions";
 import { supabase } from "@/lib/supabase";
 
-export type { DrawResult, DrawnQuestion } from "@/lib/question-draw";
+export type { BatchDrawResult, DrawResult, DrawnQuestion } from "@/lib/question-draw";
 
 function readPayload(value: unknown): DrawResult | null {
-  if (!value || typeof value !== "object") return null;
-  const row = value as {
-    error?: unknown;
-    question?: unknown;
-    resetSeen?: unknown;
-    keepIds?: unknown;
+  const batch = readBatchPayload(value);
+  if (!batch) return null;
+  return {
+    error: batch.error,
+    question: batch.questions[0] ?? null,
+    resetSeen: batch.resetSeen,
+    keepIds: batch.keepIds,
   };
-  const question = row.question;
-  if (question !== null && (typeof question !== "object" || !question)) return null;
-  const drawn = question as {
+}
+
+function readQuestion(value: unknown): DrawnQuestion | null {
+  if (!value || typeof value !== "object") return null;
+  const drawn = value as {
     id?: unknown;
     crop_image_path?: unknown;
     original_image_path?: unknown;
     author_name?: unknown;
     options?: unknown;
-  } | null;
+  };
   if (
-    drawn &&
-    (typeof drawn.id !== "string" ||
-      typeof drawn.crop_image_path !== "string" ||
-      typeof drawn.original_image_path !== "string" ||
-      typeof drawn.author_name !== "string")
+    typeof drawn.id !== "string" ||
+    typeof drawn.crop_image_path !== "string" ||
+    typeof drawn.original_image_path !== "string" ||
+    typeof drawn.author_name !== "string"
   ) {
     return null;
   }
+  return {
+    id: drawn.id,
+    crop_image_path: drawn.crop_image_path,
+    original_image_path: drawn.original_image_path,
+    author_name: drawn.author_name,
+    options: drawn.options,
+  };
+}
+
+function readBatchPayload(value: unknown): BatchDrawResult | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as {
+    error?: unknown;
+    question?: unknown;
+    questions?: unknown;
+    resetSeen?: unknown;
+    keepIds?: unknown;
+  };
+  const listed = Array.isArray(row.questions) ? row.questions.map(readQuestion).filter((item) => item !== null) : [];
+  const single = readQuestion(row.question);
+  const questions = listed.length > 0 ? listed : single ? [single] : [];
   const keepIds = Array.isArray(row.keepIds)
     ? row.keepIds.filter((id): id is string => typeof id === "string")
     : [];
   return {
     error: typeof row.error === "string" ? row.error : "",
-    question: drawn
-      ? {
-          id: drawn.id as string,
-          crop_image_path: drawn.crop_image_path as string,
-          original_image_path: drawn.original_image_path as string,
-          author_name: drawn.author_name as string,
-          options: drawn.options,
-        }
-      : null,
+    questions,
     resetSeen: row.resetSeen === true,
     keepIds,
   };
+}
+
+export async function drawQuestions(
+  count = 5,
+  avoidId?: string,
+  reservedIds: string[] = [],
+): Promise<BatchDrawResult> {
+  const seenIds = readSeenIds();
+  const session = await supabase.auth.getSession();
+  const token = session.data.session?.access_token;
+  const reserved = reservedIds.filter(isQuestionId);
+  try {
+    const response = await fetch("/api/questions/random", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        seenIds,
+        reservedIds: reserved,
+        avoidId: avoidId ?? null,
+        count,
+      }),
+    });
+    if (response.ok) {
+      const payload = readBatchPayload(await response.json());
+      if (payload) return payload;
+    }
+  } catch {
+    // 批次抽題連不上時，改由瀏覽器直接向 Supabase 一次取回這一池。
+  }
+
+  return drawManyFromDatabase(supabase, {
+    seenIds,
+    reservedIds: reserved,
+    avoidId,
+    userId: session.data.session?.user?.id ?? null,
+    count,
+  });
 }
 
 export async function drawQuestion(avoidId?: string): Promise<DrawResult> {

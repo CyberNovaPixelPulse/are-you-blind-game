@@ -1,26 +1,28 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { TAUNT_MEME_COUNT, TauntDialog } from "@/components/taunt-meme";
-import { commitDraw, drawQuestion, recordAnsweredQuestion } from "@/lib/draw-question";
+import { drawQuestions, recordAnsweredQuestion, type DrawnQuestion } from "@/lib/draw-question";
 import { recordQuestionView } from "@/lib/question-views";
 import { readStoredOptions, type QuizOption } from "@/lib/question-options";
+import { rememberSeen, writeSeenIds } from "@/lib/seen-questions";
 import { supabase } from "@/lib/supabase";
 
-type Question = {
-  id: string;
-  crop_image_path: string;
-  original_image_path: string;
-  author_name: string;
-  options: unknown;
-};
+type Question = DrawnQuestion;
 
 type Guess = {
   isCorrect: boolean;
   tauntText: string;
 };
+
+type QueuedQuestion = {
+  question: Question;
+  options: QuizOption[];
+};
+
+const POOL_SIZE = 5;
+const REFILL_BELOW = 2;
 
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items];
@@ -35,6 +37,21 @@ function shuffle<T>(items: T[]): T[] {
 
 function publicImageUrl(path: string): string {
   return supabase.storage.from("quiz-images").getPublicUrl(path).data.publicUrl;
+}
+
+function preloadPath(path: string, cache: Set<string>) {
+  const url = publicImageUrl(path);
+  if (!url || cache.has(url)) return;
+  cache.add(url);
+  const image = new window.Image();
+  image.decoding = "async";
+  image.src = url;
+}
+
+function preloadQuestion(question: Question | undefined, cache: Set<string>) {
+  if (!question) return;
+  preloadPath(question.crop_image_path, cache);
+  preloadPath(question.original_image_path, cache);
 }
 
 function rememberStreak(next: number) {
@@ -77,45 +94,112 @@ export default function PlayPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [streak, setStreak] = useState(0);
   const [memeIndex, setMemeIndex] = useState(0);
-  const requestRef = useRef(0);
+  const queueRef = useRef<QueuedQuestion[]>([]);
+  const questionRef = useRef<Question | null>(null);
+  const fillingRef = useRef<Promise<void> | null>(null);
+  const refillIdleRef = useRef(false);
+  const refillResultRef = useRef<"ok" | "error" | "idle">("ok");
+  const imageCacheRef = useRef(new Set<string>());
+  questionRef.current = question;
 
-  async function loadRound(avoidId?: string) {
-    const requestId = requestRef.current + 1;
-    requestRef.current = requestId;
-    setStatus("loading");
+  function preloadUpcoming() {
+    preloadQuestion(questionRef.current ?? undefined, imageCacheRef.current);
+    preloadQuestion(queueRef.current[0]?.question, imageCacheRef.current);
+  }
+
+  function present(item: QueuedQuestion) {
+    rememberSeen(item.question.id);
+    recordQuestionView(item.question.id);
+    questionRef.current = item.question;
+    setQuestion(item.question);
+    setOptions(item.options);
+    setStatus("ready");
     setErrorMessage("");
+    preloadUpcoming();
+    if (queueRef.current.length < REFILL_BELOW) void refill();
+  }
+
+  async function refill() {
+    if (refillIdleRef.current) return refillResultRef.current;
+    if (fillingRef.current) {
+      await fillingRef.current;
+      return refillResultRef.current;
+    }
+    const task = (async () => {
+      const reservedIds = queueRef.current.map((item) => item.question.id);
+      const drawn = await drawQuestions(POOL_SIZE, questionRef.current?.id, reservedIds);
+      if (drawn.error) {
+        refillResultRef.current = "error";
+        return;
+      }
+      const queuedIds = queueRef.current.map((item) => item.question.id);
+      if (drawn.resetSeen) {
+        writeSeenIds([
+          ...drawn.keepIds,
+          ...queuedIds,
+          ...drawn.questions.map((item) => item.id),
+          ...(questionRef.current ? [questionRef.current.id] : []),
+        ]);
+      }
+      const existing = new Set(queuedIds);
+      const fresh = drawn.questions.filter((item) => !existing.has(item.id));
+      if (fresh.length === 0) {
+        refillIdleRef.current = true;
+        refillResultRef.current = "idle";
+        return;
+      }
+      queueRef.current = [
+        ...queueRef.current,
+        ...fresh.map((item) => ({
+          question: item,
+          options: shuffle(readStoredOptions(item.options)),
+        })),
+      ];
+      refillResultRef.current = "ok";
+      preloadUpcoming();
+    })();
+    fillingRef.current = task;
+    try {
+      await task;
+    } finally {
+      if (fillingRef.current === task) fillingRef.current = null;
+    }
+    return refillResultRef.current;
+  }
+
+  async function showNext() {
+    refillIdleRef.current = false;
     setTaunt(null);
     setSolved(false);
     setGuesses({});
-
-    const drawn = await drawQuestion(avoidId);
-
-    if (requestId !== requestRef.current) return;
-    if (drawn.error) {
+    const next = queueRef.current.shift();
+    if (next) {
+      present(next);
+      return;
+    }
+    setStatus("loading");
+    setErrorMessage("");
+    const outcome = await refill();
+    const queued = queueRef.current.shift();
+    if (queued) {
+      present(queued);
+      return;
+    }
+    setQuestion(null);
+    setOptions([]);
+    if (outcome === "error") {
       setStatus("error");
       setErrorMessage("題目載入失敗，請再試一次");
       return;
     }
-
-    if (!drawn.question) {
-      setQuestion(null);
-      setOptions([]);
-      setStatus("empty");
-      return;
-    }
-
-    commitDraw(drawn);
-    recordQuestionView(drawn.question.id);
-    setQuestion(drawn.question);
-    setOptions(shuffle(readStoredOptions(drawn.question.options)));
-    setStatus("ready");
+    setStatus("empty");
   }
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       const saved = Number(sessionStorage.getItem("quiz-streak") ?? "0");
       if (Number.isFinite(saved) && saved > 0) setStreak(saved);
-      void loadRound();
+      void showNext();
     }, 0);
     return () => window.clearTimeout(timeout);
   }, []);
@@ -194,23 +278,21 @@ export default function PlayPage() {
 
         {status === "ready" && question ? (
           <div className="relative aspect-square w-full overflow-hidden rounded-3xl bg-zinc-900 shadow-xl shadow-black/25">
-            <Image
+            {/* 預載用的是同一條公開網址，這裡直接用 img，換題才吃得到瀏覽器快取。 */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src={publicImageUrl(question.crop_image_path)}
               alt="這題的特寫"
-              fill
-              priority
-              sizes="(max-width: 768px) 100vw, 480px"
-              className={`object-cover transition-opacity duration-500 ${
+              className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${
                 solved ? "opacity-0" : "opacity-100"
               }`}
             />
             {solved ? (
-              <Image
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
                 src={publicImageUrl(question.original_image_path)}
                 alt="揭曉原圖"
-                fill
-                sizes="(max-width: 768px) 100vw, 480px"
-                className="animate-[quiz-pop_0.45s_ease-out] object-contain"
+                className="absolute inset-0 h-full w-full animate-[quiz-pop_0.45s_ease-out] object-contain"
               />
             ) : null}
             {solved ? (
@@ -268,7 +350,7 @@ export default function PlayPage() {
         {status === "error" ? (
           <button
             type="button"
-            onClick={() => void loadRound(question?.id)}
+            onClick={() => void showNext()}
             className="h-16 rounded-full bg-foreground text-lg font-medium text-background"
           >
             再試一次
@@ -278,7 +360,7 @@ export default function PlayPage() {
         {solved && question ? (
           <button
             type="button"
-            onClick={() => void loadRound(question.id)}
+            onClick={() => void showNext()}
             className="h-16 rounded-full bg-foreground text-lg font-semibold text-background"
           >
             下一題
@@ -292,7 +374,7 @@ export default function PlayPage() {
           taunt={taunt}
           index={memeIndex}
           questionId={question.id}
-          onGiveUp={() => void loadRound(question.id)}
+          onGiveUp={() => void showNext()}
         />
       ) : null}
     </div>
