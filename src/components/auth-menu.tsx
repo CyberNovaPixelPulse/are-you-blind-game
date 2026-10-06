@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
@@ -57,6 +57,7 @@ function Avatar({
 }
 
 export function AuthMenu() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [ready, setReady] = useState(false);
@@ -237,13 +238,16 @@ export function AuthMenu() {
               </button>
             </div>
 
-            <Link
-              href="/profile"
-              onClick={() => setOpen(false)}
-              className="mt-4 flex h-11 items-center justify-center rounded-full bg-zinc-950 text-sm font-semibold text-white dark:bg-zinc-50 dark:text-zinc-950"
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                router.push("/profile");
+              }}
+              className="mt-4 flex h-11 w-full items-center justify-center rounded-full bg-zinc-950 text-sm font-semibold text-white dark:bg-zinc-50 dark:text-zinc-950"
             >
               🎨 我出的題目
-            </Link>
+            </button>
 
             <div className="mt-4 flex justify-center">
               <Avatar src={avatarUrl} name={displayName} vip={isVip} className="h-20 w-20 text-2xl" />
