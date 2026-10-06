@@ -19,6 +19,28 @@ import { supabase } from "@/lib/supabase";
 
 type WriteResult = { ok: true } | { ok: false; message: string };
 
+const REPORT_HIDDEN_LABEL = "⛔ 已自動隱藏（檢舉過多）";
+
+function isReportHidden(question: {
+  status: string;
+  hideReason?: string | null;
+  reports: { id: string }[];
+}) {
+  if (question.status === "active") return false;
+  if (question.hideReason === "reports") return true;
+  return question.reports.length >= 3;
+}
+
+function statusChipClass(question: {
+  status: string;
+  hideReason?: string | null;
+  reports: { id: string }[];
+}) {
+  if (isReportHidden(question)) return "bg-red-600 text-white";
+  if (question.status === "active") return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300";
+  return "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300";
+}
+
 type DraftOption = {
   id: string;
   text: string;
@@ -265,6 +287,7 @@ export function AdminBoard({
       ...question,
       ...(scoreOverride[question.id] ?? {}),
       status: statusOverride[question.id] ?? question.status,
+      hideReason: statusOverride[question.id] === "active" ? null : question.hideReason ?? null,
       reports: clearedReports.has(question.id) ? [] : question.reports,
     }));
   const reportTotal = boardQuestions.reduce((sum, question) => sum + question.reports.length, 0);
@@ -328,6 +351,31 @@ export function AdminBoard({
     const timeout = window.setTimeout(() => clearStoredToast(), 2800);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  useEffect(() => {
+    let timer = 0;
+    const refresh = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => router.refresh(), 400);
+    };
+    const channel = supabase
+      .channel("admin-report-autohide")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "question_reports" },
+        refresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "questions" },
+        refresh,
+      )
+      .subscribe();
+    return () => {
+      window.clearTimeout(timer);
+      void supabase.removeChannel(channel);
+    };
+  }, [router]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -585,8 +633,11 @@ export function AdminBoard({
       .from("questions")
       .update(patch)
       .eq("id", id)
-      .select("id");
+      .select("id, status");
     if (error) return { ok: false, message: "更新失敗：" + error.message };
+    if (patch.status === "active" && data?.[0]?.status === "hidden") {
+      return { ok: false, message: "這題的未解決檢舉已滿 3 次，請先標記已解決再上架。" };
+    }
     if (!data?.length) {
       return {
         ok: false,
@@ -705,8 +756,11 @@ export function AdminBoard({
         .from("questions")
         .update({ status })
         .eq("id", id)
-        .select("id");
+        .select("id, status");
       if (error || !data?.length) return { ok: false, message: "沒有部分題目的寫入權限。" };
+      if (status === "active" && data[0]?.status === "hidden") {
+        return { ok: false, message: "有題目的未解決檢舉已滿 3 次，請先標記已解決再上架。" };
+      }
     }
     return { ok: true };
   }
@@ -722,6 +776,7 @@ export function AdminBoard({
     setBatchPending(false);
     if (!result.ok) {
       setBatchError(result.message);
+      if (result.message.includes("檢舉")) router.refresh();
       return;
     }
     setStatusOverride((current) => {
@@ -933,7 +988,7 @@ export function AdminBoard({
             {visible.map((question) => {
               const answer =
                 question.options.find((option) => option.isCorrect)?.text || "尚未設定正解";
-              const active = question.status === "active";
+              const reportHidden = isReportHidden(question);
               return (
                 <div
                   key={question.id}
@@ -981,13 +1036,9 @@ export function AdminBoard({
                     <p className="truncate text-sm font-bold">{answer}</p>
                     <div className="flex flex-wrap gap-1.5">
                       <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          active
-                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                            : "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300"
-                        }`}
+                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusChipClass(question)}`}
                       >
-                        {question.status}
+                        {reportHidden ? REPORT_HIDDEN_LABEL : question.status}
                       </span>
                       <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
                         {question.difficulty}
@@ -1220,15 +1271,26 @@ export function AdminBoard({
                           {draft.status === "active" ? "active · 上架" : "hidden · 隱藏"}
                         </button>
                       ) : (
-                        <p
-                          className={`mt-2 inline-flex rounded-full px-3 py-1 text-sm font-semibold ${
-                            shownStatus === "active"
-                              ? "bg-emerald-500/15 text-emerald-300"
-                              : "bg-zinc-500/20 text-zinc-300"
-                          }`}
-                        >
-                          {shownStatus}
-                        </p>
+                        <>
+                          <p
+                            className={`mt-2 inline-flex rounded-full px-3 py-1 text-sm font-semibold ${
+                              isReportHidden({ ...question, status: shownStatus })
+                                ? "bg-red-600 text-white"
+                                : shownStatus === "active"
+                                  ? "bg-emerald-500/15 text-emerald-300"
+                                  : "bg-zinc-500/20 text-zinc-300"
+                            }`}
+                          >
+                            {isReportHidden({ ...question, status: shownStatus })
+                              ? REPORT_HIDDEN_LABEL
+                              : shownStatus}
+                          </p>
+                          {isReportHidden(question) ? (
+                            <p className="mt-2 text-xs leading-5 text-zinc-400">
+                              標記已解決後，再把狀態切回 active，這題就會回到題庫。
+                            </p>
+                          ) : null}
+                        </>
                       )}
                     </div>
                   </div>

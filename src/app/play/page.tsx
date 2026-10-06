@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { TAUNT_MEME_COUNT, TauntDialog } from "@/components/taunt-meme";
+import { AdModal, usePlayerVip } from "@/components/ad-modal";
+import { SiteFooter } from "@/components/site-footer";
+import { QuestionReportButton, TAUNT_MEME_COUNT, TauntDialog } from "@/components/taunt-meme";
 import { drawQuestions, recordAnsweredQuestion, type DrawnQuestion } from "@/lib/draw-question";
 import { recordQuestionView } from "@/lib/question-views";
 import { readStoredOptions, type QuizOption } from "@/lib/question-options";
@@ -16,6 +18,14 @@ type Guess = {
   tauntText: string;
 };
 
+type Miss = {
+  id: string;
+  text: string;
+  tauntText: string;
+};
+
+const WRONG_REVEAL_MS = 900;
+
 type QueuedQuestion = {
   question: Question;
   options: QuizOption[];
@@ -23,6 +33,7 @@ type QueuedQuestion = {
 
 const POOL_SIZE = 5;
 const REFILL_BELOW = 2;
+const CLASSIC_AD_EVERY = 15;
 
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items];
@@ -58,8 +69,44 @@ function rememberStreak(next: number) {
   sessionStorage.setItem("quiz-streak", String(next));
 }
 
-function isStreakMilestone(streak: number) {
-  return streak > 0 && [3, 5, 10].some((step) => streak % step === 0);
+function crossedStreakTier(streak: number) {
+  return streak === 3 || streak === 5 || streak === 10;
+}
+
+function StreakFlame({ streak }: { streak: number }) {
+  if (streak >= 10) {
+    return (
+      <p className="relative shrink-0">
+        <span className="animate-streak-spark absolute -top-1 left-3 h-1.5 w-1.5 rounded-full bg-amber-200 shadow-[0_0_8px_#fde68a]" />
+        <span className="animate-streak-spark absolute -top-2 right-4 h-1 w-1 rounded-full bg-red-400 [animation-delay:180ms]" />
+        <span className="animate-streak-spark absolute top-0 right-1 h-1 w-1 rounded-full bg-orange-300 [animation-delay:360ms]" />
+        <span className="animate-streak-inferno inline-flex items-center gap-1 rounded-full border border-amber-200/90 bg-gradient-to-r from-red-600 via-amber-300 to-orange-500 bg-[length:200%_100%] px-3 py-1 text-sm font-black text-red-950 shadow-[0_0_18px_rgba(239,68,68,0.9),0_0_32px_rgba(251,191,36,0.7)]">
+          <span className="animate-streak-burn inline-block text-lg" aria-hidden="true">
+            🔥
+          </span>
+          連勝 {streak} 題
+        </span>
+      </p>
+    );
+  }
+  if (streak >= 5) {
+    return (
+      <p className="inline-flex shrink-0 origin-right items-center gap-1 rounded-full px-2 py-1 text-lg font-extrabold text-orange-600 shadow-[0_0_16px_rgba(249,115,22,0.5)] dark:text-orange-300">
+        <span className="animate-streak-burn inline-block" aria-hidden="true">
+          🔥
+        </span>
+        連勝 {streak} 題
+      </p>
+    );
+  }
+  if (streak >= 3) {
+    return (
+      <p className="shrink-0 animate-pulse text-sm font-semibold text-orange-600 [filter:drop-shadow(0_0_6px_rgba(249,115,22,0.9))] dark:text-orange-400">
+        🔥 連勝 {streak} 題
+      </p>
+    );
+  }
+  return <p className="shrink-0 text-sm font-medium">🔥 連勝 {streak} 題</p>;
 }
 
 async function celebrate() {
@@ -86,13 +133,19 @@ export default function PlayPage() {
   const [question, setQuestion] = useState<Question | null>(null);
   const [options, setOptions] = useState<QuizOption[]>([]);
   const [guesses, setGuesses] = useState<Record<string, Guess>>({});
-  const [taunt, setTaunt] = useState<string | null>(null);
+  const [tauntOpen, setTauntOpen] = useState(false);
+  const [miss, setMiss] = useState<Miss | null>(null);
   const [solved, setSolved] = useState(false);
   const [status, setStatus] = useState<"loading" | "ready" | "empty" | "error">(
     "loading",
   );
   const [errorMessage, setErrorMessage] = useState("");
   const [streak, setStreak] = useState(0);
+  const [classicAnsweredCount, setClassicAnsweredCount] = useState(0);
+  const [adOpen, setAdOpen] = useState(false);
+  const [holdForVip, setHoldForVip] = useState(false);
+  const { isVip, vipReady } = usePlayerVip();
+  const vipHoldLock = useRef(false);
   const [memeIndex, setMemeIndex] = useState(0);
   const queueRef = useRef<QueuedQuestion[]>([]);
   const questionRef = useRef<Question | null>(null);
@@ -108,6 +161,10 @@ export default function PlayPage() {
   }
 
   function present(item: QueuedQuestion) {
+    setTauntOpen(false);
+    setMiss(null);
+    setSolved(false);
+    setGuesses({});
     rememberSeen(item.question.id);
     recordQuestionView(item.question.id);
     questionRef.current = item.question;
@@ -169,7 +226,8 @@ export default function PlayPage() {
 
   async function showNext() {
     refillIdleRef.current = false;
-    setTaunt(null);
+    setTauntOpen(false);
+    setMiss(null);
     setSolved(false);
     setGuesses({});
     const next = queueRef.current.shift();
@@ -195,6 +253,48 @@ export default function PlayPage() {
     setStatus("empty");
   }
 
+  function goNextQuestion() {
+    const nextCount = classicAnsweredCount + 1;
+    if (nextCount < CLASSIC_AD_EVERY) {
+      setClassicAnsweredCount(nextCount);
+      void showNext();
+      return;
+    }
+    setClassicAnsweredCount(nextCount);
+    if (vipReady && isVip) {
+      setClassicAnsweredCount(0);
+      void showNext();
+      return;
+    }
+    if (!vipReady) {
+      setHoldForVip(true);
+      return;
+    }
+    setAdOpen(true);
+  }
+
+  function finishClassicAd() {
+    setAdOpen(false);
+    setClassicAnsweredCount(0);
+    void showNext();
+  }
+
+  useEffect(() => {
+    if (!holdForVip) {
+      vipHoldLock.current = false;
+      return;
+    }
+    if (!vipReady || vipHoldLock.current) return;
+    vipHoldLock.current = true;
+    setHoldForVip(false);
+    if (isVip) {
+      setClassicAnsweredCount(0);
+      void showNext();
+      return;
+    }
+    setAdOpen(true);
+  }, [holdForVip, vipReady, isVip]);
+
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       const saved = Number(sessionStorage.getItem("quiz-streak") ?? "0");
@@ -204,8 +304,14 @@ export default function PlayPage() {
     return () => window.clearTimeout(timeout);
   }, []);
 
+  useEffect(() => {
+    if (!miss) return;
+    const timeout = window.setTimeout(() => setTauntOpen(true), WRONG_REVEAL_MS);
+    return () => window.clearTimeout(timeout);
+  }, [miss]);
+
   function onGuess(option: QuizOption) {
-    if (!question || solved || taunt) return;
+    if (!question || solved || miss) return;
 
     void recordAnsweredQuestion(question.id);
     setErrorMessage("");
@@ -217,17 +323,18 @@ export default function PlayPage() {
       setStreak(nextStreak);
       rememberStreak(nextStreak);
       void celebrate();
-      if (isStreakMilestone(nextStreak)) void celebrateMilestone();
+      if (crossedStreakTier(nextStreak)) void celebrateMilestone();
       return;
     }
     setStreak(0);
     rememberStreak(0);
     setMemeIndex(Math.floor(Math.random() * TAUNT_MEME_COUNT));
-    setTaunt(guess.tauntText);
+    setMiss({ id: option.id, text: option.text, tauntText: guess.tauntText });
   }
 
   const authorName = question?.author_name ?? "";
-  const milestone = isStreakMilestone(streak);
+  const showOriginal = solved || miss !== null;
+  const answerText = options.find((option) => option.isCorrect)?.text ?? "";
 
   return (
     <div className="max-w-md mx-auto flex min-h-screen w-full flex-col p-4 font-sans text-zinc-950 md:max-w-4xl md:py-10 dark:text-zinc-50">
@@ -243,16 +350,7 @@ export default function PlayPage() {
           </Link>
           <p className="truncate text-sm text-zinc-500">{authorName}</p>
         </div>
-        <p
-          key={streak}
-          className={
-            milestone
-              ? "animate-streak-fire shrink-0 origin-right text-lg font-extrabold"
-              : "shrink-0 text-sm font-medium"
-          }
-        >
-          🔥 連勝 {streak} 題
-        </p>
+        <StreakFlame streak={streak} />
       </header>
       <div className="flex flex-1 flex-col justify-between gap-6 md:flex-row md:items-center md:gap-8">
       <section className="flex w-full flex-col gap-4 md:min-w-0 md:flex-1">
@@ -277,24 +375,22 @@ export default function PlayPage() {
         ) : null}
 
         {status === "ready" && question ? (
-          <div className="relative aspect-square w-full overflow-hidden rounded-3xl bg-zinc-900 shadow-xl shadow-black/25">
+          <div
+            key={question.id}
+            className="relative aspect-square w-full overflow-hidden rounded-3xl bg-zinc-900 shadow-xl shadow-black/25"
+          >
             {/* 預載用的是同一條公開網址，這裡直接用 img，換題才吃得到瀏覽器快取。 */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={publicImageUrl(question.crop_image_path)}
-              alt="這題的特寫"
-              className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${
-                solved ? "opacity-0" : "opacity-100"
-              }`}
+              key={showOriginal ? "original" : "crop"}
+              src={publicImageUrl(showOriginal ? question.original_image_path : question.crop_image_path)}
+              alt={showOriginal ? "揭曉原圖" : "這題的特寫"}
+              className={
+                showOriginal
+                  ? "h-full w-full object-contain animate-quiz-reveal"
+                  : "h-full w-full object-cover"
+              }
             />
-            {solved ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={publicImageUrl(question.original_image_path)}
-                alt="揭曉原圖"
-                className="absolute inset-0 h-full w-full animate-[quiz-pop_0.45s_ease-out] object-contain"
-              />
-            ) : null}
             {solved ? (
               <p className="animate-[quiz-pop_0.4s_ease-out] absolute inset-x-4 bottom-4 rounded-full bg-emerald-500 px-4 py-2 text-center text-base font-semibold text-white shadow-lg">
                 答對了！
@@ -309,23 +405,31 @@ export default function PlayPage() {
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
             {options.map((option) => {
               const guess = guesses[option.id];
-              const wrong = Boolean(guess && !guess.isCorrect);
-              const correct = Boolean(guess?.isCorrect);
+              const pickedWrong = miss?.id === option.id;
+              const markAnswer = Boolean(miss) && option.isCorrect;
+              const pickedRight = Boolean(guess?.isCorrect);
               return (
                 <button
                   key={option.id}
                   type="button"
-                  disabled={solved || taunt !== null || wrong}
+                  disabled={solved || miss !== null}
                   onClick={() => onGuess(option)}
-                  className={`h-16 rounded-2xl border px-4 text-left text-lg font-medium ${
-                    correct
-                      ? "border-emerald-500 bg-emerald-500 text-white"
-                      : wrong
-                        ? "animate-[quiz-shake_0.45s_ease-in-out] border-red-500 bg-red-500 text-white"
-                        : "border-black/10 bg-white active:bg-black/[.04] dark:border-white/[.12] dark:bg-zinc-950 dark:active:bg-white/[.06]"
+                  className={`flex h-16 items-center justify-between gap-3 rounded-2xl border px-4 text-left text-lg font-medium ${
+                    pickedWrong
+                      ? "animate-quiz-shake border-red-500 bg-red-500 text-white"
+                      : markAnswer
+                        ? "border-emerald-400 bg-emerald-500/15 text-emerald-800 ring-2 ring-emerald-400 dark:text-emerald-100"
+                        : pickedRight
+                          ? "border-emerald-500 bg-emerald-500 text-white"
+                          : "border-black/10 bg-white active:bg-black/[.04] dark:border-white/[.12] dark:bg-zinc-950 dark:active:bg-white/[.06]"
                   }`}
                 >
-                  {option.text}
+                  <span className="min-w-0 truncate">{option.text}</span>
+                  {markAnswer ? (
+                    <span className="shrink-0 rounded-full bg-emerald-500 px-2 py-0.5 text-xs font-bold text-white">
+                      正解
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
@@ -358,23 +462,38 @@ export default function PlayPage() {
         ) : null}
 
         {solved && question ? (
-          <button
-            type="button"
-            onClick={() => void showNext()}
-            className="h-16 rounded-full bg-foreground text-lg font-semibold text-background"
-          >
-            下一題
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={goNextQuestion}
+              className="h-16 rounded-full bg-foreground text-lg font-semibold text-background"
+            >
+              下一題
+            </button>
+            <QuestionReportButton
+              questionId={question.id}
+              label="🚩 題目有問題？回報糾錯"
+              className="text-center text-xs font-medium text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+            />
+          </>
         ) : null}
       </section>
       </div>
 
-      {taunt && question ? (
+      <SiteFooter className="mt-8" />
+
+      <AdModal open={adOpen} onComplete={finishClassicAd} />
+
+      {tauntOpen && miss && question ? (
         <TauntDialog
-          taunt={taunt}
+          taunt={miss.tauntText}
+          pickedText={miss.text}
+          answerText={answerText}
           index={memeIndex}
           questionId={question.id}
-          onGiveUp={() => void showNext()}
+          cropUrl={publicImageUrl(question.crop_image_path)}
+          questionNumber={classicAnsweredCount + 1}
+          onGiveUp={goNextQuestion}
         />
       ) : null}
     </div>

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { UserAvatar } from "@/components/user-avatar";
 import { supabase } from "@/lib/supabase";
 
 type Profile = {
@@ -24,36 +25,6 @@ function metadataAvatar(user: User): string | null {
   const meta = user.user_metadata ?? {};
   const url = meta.avatar_url || meta.picture || "";
   return typeof url === "string" && url.trim() ? url : null;
-}
-
-function Avatar({
-  src,
-  name,
-  vip,
-  className,
-}: {
-  src: string | null;
-  name: string;
-  vip: boolean;
-  className: string;
-}) {
-  const ring = vip
-    ? "ring-2 ring-amber-300 shadow-[0_0_14px_rgba(251,191,36,0.9)]"
-    : "ring-1 ring-black/10 dark:ring-white/20";
-
-  return (
-    <span
-      className={`inline-flex items-center justify-center overflow-hidden rounded-full bg-zinc-200 text-sm font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 ${ring} ${className}`}
-    >
-      {src ? (
-        // Google hosts the avatar; next/image would need a remote pattern for every account host.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" className="h-full w-full object-cover" />
-      ) : (
-        name.slice(0, 1)
-      )}
-    </span>
-  );
 }
 
 export function AuthMenu() {
@@ -194,7 +165,11 @@ export function AuthMenu() {
           }}
           className="flex max-w-full items-center gap-2 rounded-full border border-black/10 bg-white py-1 pr-3 pl-1 text-sm font-medium shadow-sm transition-colors hover:bg-zinc-50 dark:border-white/15 dark:bg-zinc-950 dark:hover:bg-zinc-900"
         >
-          <Avatar src={avatarUrl} name={displayName} vip={isVip} className="h-8 w-8" />
+          <UserAvatar
+            src={avatarUrl}
+            name={displayName}
+            className={`h-8 w-8 text-sm ${isVip ? "ring-2 ring-amber-300 shadow-[0_0_14px_rgba(251,191,36,0.9)]" : ""}`}
+          />
           <span className="max-w-32 truncate">{displayName}</span>
         </button>
       ) : (
@@ -250,7 +225,11 @@ export function AuthMenu() {
             </button>
 
             <div className="mt-4 flex justify-center">
-              <Avatar src={avatarUrl} name={displayName} vip={isVip} className="h-20 w-20 text-2xl" />
+              <UserAvatar
+                src={avatarUrl}
+                name={displayName}
+                className={`h-20 w-20 text-2xl ${isVip ? "ring-2 ring-amber-300 shadow-[0_0_14px_rgba(251,191,36,0.9)]" : ""}`}
+              />
             </div>
 
             <label className="mt-4 flex flex-col gap-1 text-sm font-medium">

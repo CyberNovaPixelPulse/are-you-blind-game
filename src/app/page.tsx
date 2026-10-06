@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AuthMenu } from "@/components/auth-menu";
 import { HonorCard } from "@/components/honor-card";
+import { PkEntry } from "@/components/pk-entry";
+import { SiteFooter } from "@/components/site-footer";
 
 export const metadata: Metadata = {
   title: "你瞎了嗎？",
@@ -65,6 +67,7 @@ export default function LobbyPage() {
               10秒極速累分，答錯或超時就結束
             </p>
           </Link>
+          <PkEntry />
 
           {lockedModes.map((mode) => (
             <div
@@ -92,14 +95,7 @@ export default function LobbyPage() {
           📸 我要出題
         </Link>
       </div>
-      <footer className="mx-auto w-full max-w-md pt-8 text-center md:max-w-2xl">
-        <Link
-          href="/guidelines"
-          className="text-xs text-zinc-400 transition-colors hover:text-zinc-500 dark:text-zinc-500 dark:hover:text-zinc-400"
-        >
-          出題與審查規範
-        </Link>
-      </footer>
+      <SiteFooter className="mx-auto w-full max-w-md pt-8 md:max-w-2xl" />
     </main>
   );
 }

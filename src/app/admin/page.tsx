@@ -117,11 +117,12 @@ export default async function AdminPage() {
   if (!process.env.ADMIN_SECRET) notFound();
   if (!(await hasAdminSession())) return <AdminGate />;
 
-  const [questionsAttempt, reportsAttempt] = await Promise.all([
+  const [questionsAttempt, reportsAttempt, hideAttempt] = await Promise.all([
     supabase
       .from("questions")
       .select(`${QUESTION_COLUMNS}, solvability_score, category, quality_score, score_breakdown`),
     supabase.from("question_reports").select(`${REPORT_COLUMNS}, status`),
+    supabase.from("questions").select("id, hide_reason"),
   ]);
   const questionsResult = questionsAttempt.error && missingColumn(questionsAttempt.error.message)
     ? await supabase.from("questions").select(QUESTION_COLUMNS)
@@ -153,6 +154,13 @@ export default async function AdminPage() {
     }
   }
 
+  const hideReasonById = new Map<string, string | null>();
+  if (!hideAttempt.error) {
+    for (const row of (hideAttempt.data ?? []) as { id: string; hide_reason: string | null }[]) {
+      hideReasonById.set(row.id, row.hide_reason ?? null);
+    }
+  }
+
   const questions: AdminQuestion[] = ((questionsResult.data ?? []) as QuestionRow[])
     .map((row) => ({
       id: row.id,
@@ -163,6 +171,7 @@ export default async function AdminPage() {
       cropPath: row.crop_image_path,
       originalPath: row.original_image_path,
       status: row.status,
+      hideReason: hideReasonById.get(row.id) ?? null,
       difficulty: row.difficulty,
       language: readLanguage(row.language),
       options: readStoredOptions(row.options),

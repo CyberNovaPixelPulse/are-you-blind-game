@@ -15,6 +15,11 @@
   --animate-taunt-float: taunt-float 2.4s ease-in-out infinite;
   --animate-taunt-wiggle: taunt-wiggle 0.7s ease-in-out infinite;
   --animate-streak-fire: streak-fire 0.9s ease-in-out infinite;
+  --animate-streak-burn: streak-burn 0.48s ease-in-out infinite;
+  --animate-streak-inferno: streak-inferno 2.4s linear infinite;
+  --animate-streak-spark: streak-spark 1.1s ease-in-out infinite;
+  --animate-quiz-shake: quiz-shake 0.45s ease-in-out;
+  --animate-quiz-reveal: quiz-reveal 0.5s ease-out both;
   --animate-toast-in: toast-in 0.28s ease-out both;
   --animate-challenge-alarm: challenge-alarm 0.45s ease-in-out infinite;
   --animate-ladder-gold: ladder-gold 2.8s linear infinite;
@@ -31,6 +36,17 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+@keyframes quiz-reveal {
+  from {
+    transform: scale(1.08);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 @keyframes quiz-pop {
@@ -118,6 +134,37 @@ body {
   }
 }
 
+@keyframes streak-burn {
+  0%,
+  100% {
+    transform: scale(1.2) rotate(-3deg);
+  }
+  50% {
+    transform: scale(1.32) rotate(3deg) translateY(-2px);
+  }
+}
+
+@keyframes streak-inferno {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes streak-spark {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0) scale(0.7);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-7px) scale(1);
+  }
+}
+
 @keyframes streak-fire {
   0%,
   100% {
@@ -168,10 +215,15 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .animate-quiz-shake,
+  .animate-quiz-reveal,
   .animate-taunt-pop,
   .animate-taunt-float,
   .animate-taunt-wiggle,
   .animate-streak-fire,
+  .animate-streak-burn,
+  .animate-streak-inferno,
+  .animate-streak-spark,
   .animate-toast-in,
   .animate-challenge-alarm,
   .animate-ladder-gold {

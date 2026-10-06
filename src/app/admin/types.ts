@@ -16,6 +16,7 @@ export type AdminQuestion = {
   cropPath: string;
   originalPath: string;
   status: string;
+  hideReason: string | null;
   difficulty: string;
   language: string;
   options: QuizOption[];

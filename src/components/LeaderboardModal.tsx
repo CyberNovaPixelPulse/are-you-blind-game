@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import type { LeaderboardEntry } from "@/lib/leaderboard";
+import { UserAvatar } from "@/components/user-avatar";
 
 function rankMark(rank: number) {
   if (rank === 1) return "🥇";
@@ -21,21 +22,7 @@ export function PlayerAvatar({
   className: string;
   ring?: string;
 }) {
-  const face = (
-    <span
-      className={`inline-flex items-center justify-center overflow-hidden rounded-full bg-zinc-800 font-semibold text-zinc-100 ${className}`}
-    >
-      {src ? (
-        // Google hosts the avatar.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" className="h-full w-full object-cover" />
-      ) : (
-        name.slice(0, 1)
-      )}
-    </span>
-  );
-  if (!ring) return face;
-  return <span className={ring}>{face}</span>;
+  return <UserAvatar name={name} src={src} className={className} ring={ring} />;
 }
 
 function goldRing(size: string) {

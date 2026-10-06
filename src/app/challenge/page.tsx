@@ -2,7 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { AdModal, usePlayerVip } from "@/components/ad-modal";
+import { ShareShameButton } from "@/components/battle-report-card";
+import { SiteFooter } from "@/components/site-footer";
 import type { User } from "@supabase/supabase-js";
 import { HonorCard } from "@/components/honor-card";
 import { commitDraw, drawQuestion, recordAnsweredQuestion } from "@/lib/draw-question";
@@ -13,6 +17,14 @@ import { supabase } from "@/lib/supabase";
 
 const ROUND_MS = 10_000;
 const PENDING_KEY = "challenge-pending-score";
+const CHALLENGE_GAMES_KEY = "challengeGamesPlayed";
+const CHALLENGE_AD_EVERY = 3;
+
+function readChallengeGames() {
+  const value = Number(window.localStorage.getItem(CHALLENGE_GAMES_KEY) ?? "0");
+  if (!Number.isInteger(value) || value < 0) return 0;
+  return value;
+}
 
 type Question = {
   id: string;
@@ -24,6 +36,12 @@ type Question = {
 
 type EndReason = "wrong" | "timeout" | "clear";
 type SaveState = "idle" | "guest" | "saved" | "error";
+type ShameCard = {
+  cropUrl: string;
+  pickedText: string;
+  answerText: string;
+  taunt: string;
+};
 
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items];
@@ -76,6 +94,8 @@ async function playerIdentity(user: User) {
 }
 
 export default function ChallengePage() {
+  const router = useRouter();
+  const { isVip, vipReady } = usePlayerVip();
   const [phase, setPhase] = useState<"idle" | "play" | "over">("idle");
   const [question, setQuestion] = useState<Question | null>(null);
   const [options, setOptions] = useState<QuizOption[]>([]);
@@ -89,6 +109,11 @@ export default function ChallengePage() {
   const [ladderVersion, setLadderVersion] = useState(0);
   const [ladderRequest, setLadderRequest] = useState(0);
   const [notice, setNotice] = useState("");
+  const [challengeGamesPlayed, setChallengeGamesPlayed] = useState(0);
+  const [adOpen, setAdOpen] = useState(false);
+  const [shame, setShame] = useState<ShameCard | null>(null);
+  const pendingLeave = useRef<"restart" | "home" | null>(null);
+  const roundShot = useRef<{ cropUrl: string; answerText: string } | null>(null);
 
   const phaseRef = useRef(phase);
   const endedRef = useRef(false);
@@ -169,13 +194,27 @@ export default function ChallengePage() {
     return () => cancelAnimationFrame(frame);
   }, [phase, question]);
 
-  function finish(reason: EndReason) {
+  function finish(reason: EndReason, miss?: { text: string; taunt: string }) {
     if (endedRef.current) return;
     endedRef.current = true;
     phaseRef.current = "over";
     lockRef.current = true;
     setEndReason(reason);
     setPhase("over");
+    const shot = roundShot.current;
+    if (shot?.cropUrl) {
+      setShame({
+        cropUrl: shot.cropUrl,
+        answerText: shot.answerText || "沒有標出正解",
+        pickedText: miss?.text ?? (reason === "timeout" ? "時間到，沒按下去" : "這局沒有失手"),
+        taunt: miss?.taunt ?? (reason === "timeout" ? "時間到，這題你連猜都沒猜。" : "題庫先被你刷完了。"),
+      });
+    }
+    if (reason === "timeout" || reason === "wrong") {
+      const played = readChallengeGames() + 1;
+      window.localStorage.setItem(CHALLENGE_GAMES_KEY, String(played));
+      setChallengeGamesPlayed(played);
+    }
     const totalScore = scoreRef.current;
     const streakCount = streakRef.current;
     void supabase.auth.getSession().then(({ data }) => {
@@ -218,7 +257,13 @@ export default function ChallengePage() {
     commitDraw(drawn);
     recordQuestionView(drawn.question.id);
     deadlineRef.current = performance.now() + ROUND_MS;
-    setOptions(shuffle(readStoredOptions(drawn.question.options)));
+    const nextOptions = shuffle(readStoredOptions(drawn.question.options));
+    const correct = nextOptions.find((option) => option.isCorrect);
+    roundShot.current = {
+      cropUrl: publicImageUrl(drawn.question.crop_image_path),
+      answerText: correct?.text ?? "",
+    };
+    setOptions(nextOptions);
     setQuestion(drawn.question);
     setStatus("ready");
     lockRef.current = false;
@@ -239,6 +284,7 @@ export default function ChallengePage() {
     setNotice("");
     setQuestion(null);
     setOptions([]);
+    setShame(null);
     phaseRef.current = "play";
     setPhase("play");
     void loadNext();
@@ -255,7 +301,7 @@ export default function ChallengePage() {
     const currentId = questionRef.current.id;
     void recordAnsweredQuestion(currentId);
     if (!option.isCorrect) {
-      finish("wrong");
+      finish("wrong", { text: option.text, taunt: option.tauntText });
       return;
     }
     const gained = scoreForRemaining(remaining);
@@ -267,6 +313,58 @@ export default function ChallengePage() {
     setStreak(nextStreak);
     void loadNext();
   }
+
+  function runLeave(action: "restart" | "home") {
+    if (action === "home") {
+      router.push("/");
+      return;
+    }
+    start();
+  }
+
+  function leaveChallenge(action: "restart" | "home") {
+    if (challengeGamesPlayed !== CHALLENGE_AD_EVERY && readChallengeGames() !== CHALLENGE_AD_EVERY) {
+      runLeave(action);
+      return;
+    }
+    if (vipReady && isVip) {
+      window.localStorage.setItem(CHALLENGE_GAMES_KEY, "0");
+      setChallengeGamesPlayed(0);
+      runLeave(action);
+      return;
+    }
+    pendingLeave.current = action;
+    if (!vipReady) return;
+    setAdOpen(true);
+  }
+
+  function finishChallengeAd() {
+    window.localStorage.setItem(CHALLENGE_GAMES_KEY, "0");
+    setChallengeGamesPlayed(0);
+    setAdOpen(false);
+    const action = pendingLeave.current;
+    pendingLeave.current = null;
+    if (action) runLeave(action);
+  }
+
+  useEffect(() => {
+    const played = readChallengeGames();
+    setChallengeGamesPlayed(played);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingLeave.current || !vipReady || adOpen) return;
+    if (readChallengeGames() !== CHALLENGE_AD_EVERY) return;
+    if (isVip) {
+      const action = pendingLeave.current;
+      pendingLeave.current = null;
+      window.localStorage.setItem(CHALLENGE_GAMES_KEY, "0");
+      setChallengeGamesPlayed(0);
+      runLeave(action);
+      return;
+    }
+    setAdOpen(true);
+  }, [vipReady, isVip, adOpen]);
 
   function signInToSave() {
     sessionStorage.setItem(
@@ -403,6 +501,10 @@ export default function ChallengePage() {
         </div>
       ) : null}
 
+      <SiteFooter className="mt-8" />
+
+      <AdModal open={adOpen} onComplete={finishChallengeAd} />
+
       {phase === "over" ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
           <div
@@ -441,6 +543,18 @@ export default function ChallengePage() {
               </div>
             ) : null}
             <div className="mt-5 flex flex-col gap-3">
+              {shame ? (
+                <ShareShameButton
+                  report={{
+                    mode: "challenge",
+                    score,
+                    cropUrl: shame.cropUrl,
+                    pickedText: shame.pickedText,
+                    answerText: shame.answerText,
+                    taunt: shame.taunt,
+                  }}
+                />
+              ) : null}
               <button
                 type="button"
                 onClick={() => setLadderRequest((current) => current + 1)}
@@ -450,17 +564,18 @@ export default function ChallengePage() {
               </button>
               <button
                 type="button"
-                onClick={start}
+                onClick={() => leaveChallenge("restart")}
                 className="h-12 rounded-full bg-zinc-950 text-base font-bold text-white dark:bg-zinc-50 dark:text-zinc-950"
               >
                 再挑戰一次
               </button>
-              <Link
-                href="/"
+              <button
+                type="button"
+                onClick={() => leaveChallenge("home")}
                 className="flex h-12 items-center justify-center rounded-full border border-black/10 text-base font-semibold dark:border-white/15"
               >
                 回到首頁
-              </Link>
+              </button>
             </div>
           </div>
         </div>

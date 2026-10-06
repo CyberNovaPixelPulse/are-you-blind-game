@@ -61,8 +61,12 @@ async function writeQuestion(
     .from("questions")
     .update(patch)
     .eq("id", id)
-    .select("id");
+    .select("id, status");
   if (error || !data?.length) return { ok: false, message: "題目更新失敗" };
+  if (patch.status === "active" && data[0]?.status === "hidden") {
+    refreshAdmin();
+    return { ok: false, message: "這題的未解決檢舉已滿 3 次，請先標記已解決再上架。" };
+  }
   refreshAdmin();
   return { ok: true };
 }
@@ -152,8 +156,12 @@ export async function updateQuestion(
     .from("questions")
     .update({ options, difficulty: patch.difficulty, status: patch.status })
     .eq("id", id)
-    .select("id");
+    .select("id, status");
   if (error || !data?.length) return { ok: false, message: "題目更新失敗" };
+  if (patch.status === "active" && data[0]?.status === "hidden") {
+    refreshAdmin();
+    return { ok: false, message: "這題的未解決檢舉已滿 3 次，請先標記已解決再上架。" };
+  }
   refreshAdmin();
   return { ok: true };
 }
@@ -229,8 +237,12 @@ export async function updateQuestionsStatus(
     .from("questions")
     .update({ status })
     .in("id", clean)
-    .select("id");
+    .select("id, status");
   if (error || (data?.length ?? 0) !== clean.length) return { ok: false, message: "批次更新失敗" };
+  if (status === "active" && (data ?? []).some((row) => row.status === "hidden")) {
+    refreshAdmin();
+    return { ok: false, message: "有題目的未解決檢舉已滿 3 次，請先標記已解決再上架。" };
+  }
   refreshAdmin();
   return { ok: true };
 }
