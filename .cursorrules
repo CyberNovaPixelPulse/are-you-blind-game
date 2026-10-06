@@ -1,0 +1,42 @@
+# Guess Meme Game
+
+UGC 局部圖猜謎。技術棧固定為 Next.js App Router（`src/app`）、TypeScript、Tailwind CSS v4、Supabase。
+
+## App Router
+
+- 路由只放在 `src/app`。預設 Server Component；裁切、壓縮、表單互動才加 `"use client"`。
+- 沿用本專案的 `LayoutProps` / `PageProps`。不要用 Pages Router。
+- 匯入路徑用 `@/`。
+
+## Tailwind
+
+- 樣式只用 utility class。設計變數寫在 `src/app/globals.css` 的 `@theme`，不要新增 `tailwind.config.js`。
+
+## Supabase
+
+- 瀏覽器只用 anon key。service role 不得進入 client bundle。
+- `questions`：`crop_image_path`、`original_image_path`、`author_id`、`author_name`、`difficulty`、`status`、`options`。
+- `options` 是 JSONB 陣列，元素為 `{ id, text, is_correct, taunt }`。不要再寫入獨立的 options 表。
+- 發布時帶 `difficulty: "normal"`、`status: "active"`。
+- 讀題只查 `questions`，打亂該題的 `options`。猜題用陣列裡的 `is_correct` 與 `taunt` 判定。
+- 糾錯回報寫入 `question_reports`，帶上該題的 `question_id`。
+- `/admin` 只在本機 `next dev` 開放。管理金鑰用 `ADMIN_SECRET`，服務金鑰用 `SUPABASE_SERVICE_ROLE_KEY`。兩者都不得加 `NEXT_PUBLIC`，也不得進 client bundle。
+- 圖片只上傳到 bucket `quiz-images`。路徑為 `{userId}/{questionId}/crop.webp` 與 `{userId}/{questionId}/original.webp`。
+
+## 圖片（強制）
+
+局部圖與原圖都必須在瀏覽器轉成 WebP，且檔案 ≤ 150KB（`150 * 1024` bytes）後才能上傳。超過或不是 `image/webp` 就中止，不要把原檔送到 Storage。使用已安裝的 `browser-image-compression`。
+
+```ts
+const MAX_IMAGE_BYTES = 150 * 1024;
+
+const compressed = await imageCompression(file, {
+  maxSizeMB: MAX_IMAGE_BYTES / (1024 * 1024),
+  fileType: "image/webp",
+  useWebWorker: true,
+});
+
+if (compressed.type !== "image/webp" || compressed.size > MAX_IMAGE_BYTES) {
+  throw new Error("圖片必須是 150KB 以內的 WebP");
+}
+```
