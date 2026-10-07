@@ -12,17 +12,25 @@ function quizImageHost(): string | null {
 
 const imageHost = quizImageHost();
 
+const remotePatterns: NonNullable<NextConfig["images"]>["remotePatterns"] = [
+  {
+    protocol: "https",
+    hostname: "images.unsplash.com",
+    pathname: "/**",
+  },
+];
+
+if (imageHost) {
+  remotePatterns.unshift({
+    protocol: "https",
+    hostname: imageHost,
+    pathname: "/storage/v1/object/public/quiz-images/**",
+  });
+}
+
 const nextConfig: NextConfig = {
   images: {
-    remotePatterns: imageHost
-      ? [
-          {
-            protocol: "https",
-            hostname: imageHost,
-            pathname: "/storage/v1/object/public/quiz-images/**",
-          },
-        ]
-      : [],
+    remotePatterns,
   },
 };
 

@@ -12,6 +12,7 @@ function readPayload(value: unknown): DrawResult | null {
     question: batch.questions[0] ?? null,
     resetSeen: batch.resetSeen,
     keepIds: batch.keepIds,
+    thinLanguage: batch.thinLanguage,
   };
 }
 
@@ -49,6 +50,7 @@ function readBatchPayload(value: unknown): BatchDrawResult | null {
     questions?: unknown;
     resetSeen?: unknown;
     keepIds?: unknown;
+    thinLanguage?: unknown;
   };
   const listed = Array.isArray(row.questions) ? row.questions.map(readQuestion).filter((item) => item !== null) : [];
   const single = readQuestion(row.question);
@@ -61,6 +63,7 @@ function readBatchPayload(value: unknown): BatchDrawResult | null {
     questions,
     resetSeen: row.resetSeen === true,
     keepIds,
+    thinLanguage: row.thinLanguage === true,
   };
 }
 
@@ -68,6 +71,7 @@ export async function drawQuestions(
   count = 5,
   avoidId?: string,
   reservedIds: string[] = [],
+  language?: string,
 ): Promise<BatchDrawResult> {
   const seenIds = readSeenIds();
   const session = await supabase.auth.getSession();
@@ -85,6 +89,7 @@ export async function drawQuestions(
         reservedIds: reserved,
         avoidId: avoidId ?? null,
         count,
+        language: language ?? null,
       }),
     });
     if (response.ok) {
@@ -101,10 +106,11 @@ export async function drawQuestions(
     avoidId,
     userId: session.data.session?.user?.id ?? null,
     count,
+    language,
   });
 }
 
-export async function drawQuestion(avoidId?: string): Promise<DrawResult> {
+export async function drawQuestion(avoidId?: string, language?: string): Promise<DrawResult> {
   const seenIds = readSeenIds();
   const session = await supabase.auth.getSession();
   const token = session.data.session?.access_token;
@@ -115,7 +121,7 @@ export async function drawQuestion(avoidId?: string): Promise<DrawResult> {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ seenIds, avoidId: avoidId ?? null }),
+      body: JSON.stringify({ seenIds, avoidId: avoidId ?? null, language: language ?? null }),
     });
     if (response.ok) {
       const payload = readPayload(await response.json());
@@ -129,6 +135,7 @@ export async function drawQuestion(avoidId?: string): Promise<DrawResult> {
     seenIds,
     avoidId,
     userId: session.data.session?.user?.id ?? null,
+    language,
   });
 }
 

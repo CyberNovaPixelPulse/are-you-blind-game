@@ -5,6 +5,7 @@ import type { AdminQuestion, AdminReport } from "@/app/admin/types";
 import { unlockAdmin } from "@/app/admin/actions";
 import { assertLocalDev, hasAdminSession } from "@/lib/admin-access";
 import { readStoredOptions } from "@/lib/question-options";
+import { quizImageUrl } from "@/lib/quiz-image";
 import { hasServiceRole } from "@/lib/supabase-admin";
 import { supabase } from "@/lib/supabase";
 
@@ -79,7 +80,7 @@ function readBreakdown(value: unknown): Record<string, unknown> {
 }
 
 function publicImageUrl(path: string): string {
-  return supabase.storage.from("quiz-images").getPublicUrl(path).data.publicUrl;
+  return quizImageUrl(path);
 }
 
 function AdminGate() {

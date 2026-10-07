@@ -9,10 +9,12 @@ import { ShareShameButton } from "@/components/battle-report-card";
 import { SiteFooter } from "@/components/site-footer";
 import type { User } from "@supabase/supabase-js";
 import { HonorCard } from "@/components/honor-card";
+import { useLanguage } from "@/components/language-provider";
 import { commitDraw, drawQuestion, recordAnsweredQuestion } from "@/lib/draw-question";
 import { recordQuestionView } from "@/lib/question-views";
 import { getMyRank } from "@/lib/leaderboard";
 import { readStoredOptions, type QuizOption } from "@/lib/question-options";
+import { quizImageUrl } from "@/lib/quiz-image";
 import { supabase } from "@/lib/supabase";
 
 const ROUND_MS = 10_000;
@@ -55,7 +57,7 @@ function shuffle<T>(items: T[]): T[] {
 }
 
 function publicImageUrl(path: string) {
-  return supabase.storage.from("quiz-images").getPublicUrl(path).data.publicUrl;
+  return quizImageUrl(path);
 }
 
 function scoreForRemaining(remainingMs: number) {
@@ -94,6 +96,11 @@ async function playerIdentity(user: User) {
 }
 
 export default function ChallengePage() {
+  const { language, t } = useLanguage();
+  const languageRef = useRef(language);
+  useEffect(() => {
+    languageRef.current = language;
+  }, [language]);
   const router = useRouter();
   const { isVip, vipReady } = usePlayerVip();
   const [phase, setPhase] = useState<"idle" | "play" | "over">("idle");
@@ -238,7 +245,7 @@ export default function ChallengePage() {
     setStatus("loading");
     setQuestion(null);
     setOptions([]);
-    const drawn = await drawQuestion(questionRef.current?.id);
+    const drawn = await drawQuestion(questionRef.current?.id, languageRef.current);
     if (round !== roundRef.current || endedRef.current) return;
     if (drawn.error) {
       setStatus("error");
@@ -390,11 +397,13 @@ export default function ChallengePage() {
           className="inline-flex h-9 items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 dark:border-white/15 dark:text-zinc-300"
         >
           <span aria-hidden="true">←</span>
-          返回首頁
+          {t.challengeMode.backHome}
         </Link>
         <div className="flex items-center gap-3 text-sm font-semibold">
           <span>🔥 {streak}</span>
-          <span>{score.toLocaleString("zh-TW")} 分</span>
+          <span>
+            {score.toLocaleString()} {t.honorCard.points}
+          </span>
           <span className={urgent ? "text-red-600 dark:text-red-400" : ""}>{seconds}s</span>
         </div>
       </header>
@@ -422,19 +431,19 @@ export default function ChallengePage() {
       {phase === "idle" ? (
         <section className="flex flex-1 flex-col justify-center gap-6">
           <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-lg shadow-black/5 dark:border-white/15 dark:bg-zinc-950">
-            <p className="text-sm font-semibold tracking-[0.18em] text-amber-600 uppercase">Challenge</p>
-            <h1 className="mt-2 text-3xl font-black">⚡ 挑戰模式</h1>
+            <p className="text-sm font-semibold tracking-[0.18em] text-amber-600 uppercase">{t.challengeMode.badge}</p>
+            <h1 className="mt-2 text-3xl font-black">⚡ {t.challengeMode.title}</h1>
             <ul className="mt-4 flex flex-col gap-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-              <li>每題只有 10 秒。</li>
-              <li>答對得分是 1000 加上剩餘時間加權，越快越高。</li>
-              <li>答錯或時間到，這一局立刻結束。</li>
+              <li>{t.challengeMode.rule1}</li>
+              <li>{t.challengeMode.rule2}</li>
+              <li>{t.challengeMode.rule3}</li>
             </ul>
             <button
               type="button"
               onClick={start}
               className="mt-6 flex h-14 w-full items-center justify-center rounded-full bg-zinc-950 text-lg font-bold text-white dark:bg-zinc-50 dark:text-zinc-950"
             >
-              開始挑戰
+              {t.challengeMode.startBtn}
             </button>
           </div>
         </section>
@@ -443,7 +452,7 @@ export default function ChallengePage() {
       {phase === "play" ? (
         <div className="flex flex-1 flex-col justify-between gap-6 md:flex-row md:items-center">
           <section className="w-full md:flex-1">
-            {status === "loading" ? <p className="py-16 text-center text-sm text-zinc-500">正在抽題…</p> : null}
+            {status === "loading" ? <p className="py-16 text-center text-sm text-zinc-500">{t("drawing")}</p> : null}
             {status === "empty" ? (
               <p className="py-10 text-sm text-zinc-600 dark:text-zinc-400">還沒有可以挑戰的題目。</p>
             ) : null}

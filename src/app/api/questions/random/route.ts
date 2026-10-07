@@ -20,10 +20,20 @@ function batchCount(value: unknown) {
   return Math.min(5, Math.max(1, value));
 }
 
+function languageFrom(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
 export async function POST(request: Request) {
-  let body: { seenIds?: unknown; reservedIds?: unknown; avoidId?: unknown; count?: unknown };
+  let body: { seenIds?: unknown; reservedIds?: unknown; avoidId?: unknown; count?: unknown; language?: unknown };
   try {
-    body = (await request.json()) as { seenIds?: unknown; reservedIds?: unknown; avoidId?: unknown; count?: unknown };
+    body = (await request.json()) as {
+      seenIds?: unknown;
+      reservedIds?: unknown;
+      avoidId?: unknown;
+      count?: unknown;
+      language?: unknown;
+    };
   } catch {
     return Response.json(
       { error: "抽題請求無法讀取", question: null, questions: [], resetSeen: false, keepIds: [] },
@@ -54,6 +64,7 @@ export async function POST(request: Request) {
     avoidId,
     userId,
     count: batchCount(body.count),
+    language: languageFrom(body.language),
   });
   const status = drawn.error ? 500 : 200;
   return Response.json(
@@ -63,6 +74,7 @@ export async function POST(request: Request) {
       questions: drawn.questions,
       resetSeen: drawn.resetSeen,
       keepIds: drawn.keepIds,
+      thinLanguage: drawn.thinLanguage === true,
     },
     { status },
   );

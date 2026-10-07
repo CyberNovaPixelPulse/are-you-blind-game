@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { useLanguage } from "@/components/language-provider";
 import { UserAvatar } from "@/components/user-avatar";
 import { supabase } from "@/lib/supabase";
 
@@ -28,6 +29,7 @@ function metadataAvatar(user: User): string | null {
 }
 
 export function AuthMenu() {
+  const { t } = useLanguage();
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -179,7 +181,7 @@ export function AuthMenu() {
           onClick={signInWithGoogle}
           className="h-10 rounded-full bg-zinc-950 px-4 text-sm font-semibold text-white shadow-sm disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-950"
         >
-          使用 Google 登入
+          {t("login")}
         </button>
       )}
       {error && !open ? (

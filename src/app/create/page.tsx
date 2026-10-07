@@ -6,6 +6,10 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Area, Point } from "react-easy-crop";
 import type { User } from "@supabase/supabase-js";
 import { cropToFile, compressToWebp } from "@/lib/image";
+import type { CreateQuizCopy } from "@/lib/create-copy";
+import { isLanguageCode, LANGUAGES, type LanguageCode } from "@/lib/languages";
+import { fillTemplate } from "@/lib/ui-sections";
+import { useLanguage } from "@/components/language-provider";
 import { supabase } from "@/lib/supabase";
 
 const Cropper = dynamic(() => import("react-easy-crop"), { ssr: false });
@@ -69,9 +73,9 @@ function formatKb(bytes: number): string {
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
-function scoreBadgeText(score: number) {
-  if (score >= 85) return `🟢 ${score} 優質`;
-  return `🟡 ${score} 合格`;
+function scoreBadgeText(score: number, copy: CreateQuizCopy) {
+  if (score >= 85) return `🟢 ${score} ${copy.excellent}`;
+  return `🟡 ${score} ${copy.acceptable}`;
 }
 
 function scoreBadgeClass(score: number) {
@@ -131,32 +135,36 @@ function readReview(value: {
   };
 }
 
-function readableError(error: unknown): string {
-  const message = error instanceof Error ? error.message : "出題失敗，請再試一次";
+function readableError(error: unknown, copy: CreateQuizCopy): string {
+  const message = error instanceof Error ? error.message : copy.publishFail;
   const normalized = message.toLowerCase();
 
   if (normalized.includes("invalid login credentials")) {
-    return "帳號或密碼不正確";
+    return copy.badCredentials;
   }
   if (normalized.includes("email not confirmed")) {
-    return "請先到信箱完成驗證，再登入";
+    return copy.emailUnconfirmed;
   }
   if (normalized.includes("row-level security") || normalized.includes("jwt")) {
-    return "沒有寫入權限。請確認已登入。";
+    return copy.noPermission;
   }
   if (
     normalized.includes("maximum allowed size") ||
     normalized.includes("payload too large")
   ) {
-    return "圖片超過 150KB，已中止上傳";
+    return copy.tooLarge;
   }
   if (normalized.includes("mime")) {
-    return "只能上傳 WebP";
+    return copy.webpOnly;
   }
   return message;
 }
 
 export default function CreatePage() {
+  const { language, t } = useLanguage();
+  const copy = t.createQuiz;
+  const [targetOverride, setTargetOverride] = useState<LanguageCode | null>(null);
+  const targetLanguage = targetOverride ?? language;
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [email, setEmail] = useState("");
@@ -165,7 +173,7 @@ export default function CreatePage() {
   const [authMessage, setAuthMessage] = useState("");
   const [authPending, setAuthPending] = useState(false);
 
-  const [authorName, setAuthorName] = useState("匿名出題者");
+  const [authorName, setAuthorName] = useState("");
   const authorTouched = useRef(false);
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -211,7 +219,7 @@ export default function CreatePage() {
   useEffect(() => {
     if (!authReady || authorTouched.current) return;
     if (!user) {
-      setAuthorName("匿名出題者");
+      setAuthorName(copy.anonymousAuthor);
       return;
     }
 
@@ -228,13 +236,13 @@ export default function CreatePage() {
         const meta = user.user_metadata ?? {};
         const fromMeta = String(meta.full_name || meta.name || "").trim();
         const fromEmail = user.email?.split("@")[0]?.trim() ?? "";
-        setAuthorName((fromProfile || fromMeta || fromEmail || "匿名出題者").slice(0, 40));
+        setAuthorName((fromProfile || fromMeta || fromEmail || copy.anonymousAuthor).slice(0, 40));
       });
 
     return () => {
       active = false;
     };
-  }, [authReady, user]);
+  }, [authReady, user, copy.anonymousAuthor]);
 
   useEffect(() => {
     return () => {
@@ -254,15 +262,15 @@ export default function CreatePage() {
   async function generateDistractors() {
     const correctAnswer = options[correctIndex]?.optionText.trim() ?? "";
     if (!correctAnswer) {
-      setAiError("請先輸入正解名稱");
+      setAiError(copy.needAnswer);
       return;
     }
     if (!imageUrl || !croppedAreaPixels) {
-      setAiError("請先上傳圖片並框出特寫");
+      setAiError(copy.needCrop);
       return;
     }
     if (croppedAreaPixels.width < 32 || croppedAreaPixels.height < 32) {
-      setAiError("特寫區域太小，請把框拉大一點");
+      setAiError(copy.cropTooSmall);
       return;
     }
     setAiPending(true);
@@ -278,6 +286,7 @@ export default function CreatePage() {
           correctAnswer,
           imageBase64,
           mimeType: "image/webp",
+          language: targetLanguage,
         }),
       });
       const payload = (await response.json()) as {
@@ -292,7 +301,7 @@ export default function CreatePage() {
         !Array.isArray(payload.options) ||
         payload.options.length !== 3
       ) {
-        setAiError(payload.message || "生成失敗，請再試一次");
+        setAiError(payload.message || copy.aiFailed);
         return;
       }
       const generated = payload.options;
@@ -312,7 +321,7 @@ export default function CreatePage() {
         });
       });
     } catch (error) {
-      setAiError(error instanceof Error ? error.message : "生成失敗，請再試一次");
+      setAiError(error instanceof Error ? error.message : copy.aiFailed);
     } finally {
       setAiPending(false);
     }
@@ -329,7 +338,7 @@ export default function CreatePage() {
   function onPickImage(file: File | undefined) {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      setFormError("請上傳圖片檔");
+      setFormError(copy.notImage);
       return;
     }
     setFormError("");
@@ -352,14 +361,14 @@ export default function CreatePage() {
       password,
     });
     setAuthPending(false);
-    if (error) setAuthError(readableError(error));
+    if (error) setAuthError(readableError(error, copy));
   }
 
   async function signUp() {
     setAuthError("");
     setAuthMessage("");
     if (password.length < 6) {
-      setAuthError("密碼至少 6 個字元");
+      setAuthError(copy.passwordShort);
       return;
     }
     setAuthPending(true);
@@ -369,11 +378,11 @@ export default function CreatePage() {
     });
     setAuthPending(false);
     if (error) {
-      setAuthError(readableError(error));
+      setAuthError(readableError(error, copy));
       return;
     }
     if (!data.session) {
-      setAuthMessage("註冊成功。請到信箱完成驗證，再回來登入。");
+      setAuthMessage(copy.signedUp);
     }
   }
 
@@ -381,35 +390,35 @@ export default function CreatePage() {
     setAuthError("");
     setAuthMessage("");
     const { error } = await supabase.auth.signOut();
-    if (error) setAuthError(readableError(error));
+    if (error) setAuthError(readableError(error, copy));
   }
 
   function validate(): string | null {
     const name = authorName.trim();
     if (name.length < 1 || name.length > 40) {
-      return "作者名稱需要 1 到 40 個字";
+      return copy.authorLength;
     }
     if (!sourceFile || !imageUrl) {
-      return "請先上傳圖片";
+      return copy.needImage;
     }
     if (!croppedAreaPixels) {
-      return "請等特寫裁切區域準備好";
+      return copy.cropPending;
     }
     if (croppedAreaPixels.width < 32 || croppedAreaPixels.height < 32) {
-      return "特寫區域太小，請把框拉大一點";
+      return copy.cropTooSmall;
     }
     for (const [index, option] of options.entries()) {
       const text = option.optionText.trim();
       const taunt = option.tauntText.trim();
       if (text.length < 1 || text.length > 120) {
-        return `選項 ${index + 1} 的文字需要 1 到 120 個字`;
+        return fillTemplate(copy.optionLength, { n: index + 1 });
       }
       if (taunt.length < 1 || taunt.length > 280) {
-        return `選項 ${index + 1} 的吐槽需要 1 到 280 個字`;
+        return fillTemplate(copy.tauntLength, { n: index + 1 });
       }
     }
     if (correctIndex < 0 || correctIndex >= OPTION_COUNT) {
-      return "請標出一個正解";
+      return copy.needCorrect;
     }
     return null;
   }
@@ -439,7 +448,7 @@ export default function CreatePage() {
         error: userError,
       } = await supabase.auth.getUser();
       if (userError || !currentUser) {
-        setFormError("請先登入再出題");
+        setFormError(copy.needLogin);
         return;
       }
 
@@ -447,7 +456,7 @@ export default function CreatePage() {
 
       const cropped = await cropToFile(imageUrl, croppedAreaPixels);
       const cropFile = await compressToWebp(cropped, "crop.webp").catch(() => {
-        throw new Error("特寫壓不到 150KB 以內，請把裁切範圍縮小再試");
+        throw new Error(copy.cropCompressFail);
       });
 
       setPhase("moderating");
@@ -477,7 +486,7 @@ export default function CreatePage() {
       };
       const review = readReview(moderation);
       if (!moderationResponse.ok || !review) {
-        throw new Error(moderation.message || "預審失敗，請再試一次");
+        throw new Error(moderation.message || copy.reviewFail);
       }
       if (!moderation.passed || review.qualityScore < 60 || review.breakdown.safety.violated) {
         setModerationReport(review);
@@ -486,7 +495,7 @@ export default function CreatePage() {
 
       const originalFile = await compressToWebp(sourceFile, "original.webp").catch(
         () => {
-          throw new Error("原圖壓不到 150KB 以內，請換一張再試");
+          throw new Error(copy.originalCompressFail);
         },
       );
 
@@ -522,7 +531,7 @@ export default function CreatePage() {
         author_name: authorName.trim(),
         difficulty: "normal",
         status: "active",
-        language: "zh-TW",
+        language: targetLanguage,
         quality_score: review.qualityScore,
         score_breakdown: review.breakdown,
         options: options.map((option, index) => ({
@@ -559,7 +568,7 @@ export default function CreatePage() {
           await supabase.from("questions").delete().eq("id", questionId);
         }
       }
-      setFormError(readableError(error));
+      setFormError(readableError(error, copy));
     } finally {
       submittingRef.current = false;
       setBusy(false);
@@ -570,14 +579,14 @@ export default function CreatePage() {
   const pending = busy;
   const phaseLabel =
     phase === "compressing"
-      ? "壓縮成 WebP…"
+      ? copy.compressing
       : phase === "moderating"
-        ? "綜合審題…"
+        ? copy.moderating
         : phase === "uploading"
-          ? "上傳圖片…"
+          ? copy.uploading
           : phase === "saving"
-            ? "寫入題目…"
-            : "發布題目";
+            ? copy.saving
+            : copy.publish;
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50 font-sans text-zinc-950 dark:bg-black dark:text-zinc-50">
@@ -585,18 +594,32 @@ export default function CreatePage() {
         <header className="flex flex-col gap-3">
           <Link
             href="/"
-            aria-label="返回首頁"
+            aria-label={copy.backHome}
             className="inline-flex h-9 w-fit items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] hover:text-zinc-950 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[.08] dark:hover:text-zinc-50"
           >
             <span aria-hidden="true">←</span>
-            返回首頁
+            {copy.backHome}
           </Link>
           <div className="flex flex-col gap-2">
-            <h1 className="text-3xl font-semibold tracking-tight">出一題局部猜謎</h1>
-            <p className="max-w-xl text-zinc-600 dark:text-zinc-400">
-              上傳一張圖，框出玩家看得到的特寫。原圖與特寫都會在瀏覽器轉成 150KB
-              以內的 WebP 再上傳。
-            </p>
+            <h1 className="text-3xl font-semibold tracking-tight">{copy.title}</h1>
+            <p className="max-w-xl text-zinc-600 dark:text-zinc-400">{copy.intro}</p>
+            <label className="flex flex-wrap items-center gap-2 text-sm font-medium text-zinc-500">
+              {copy.quizLanguage}
+              <select
+                value={targetLanguage}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  if (isLanguageCode(next)) setTargetOverride(next);
+                }}
+                className="h-10 rounded-xl border border-black/10 bg-white px-3 font-medium text-zinc-950 outline-none focus:border-zinc-950 dark:border-white/15 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:border-zinc-50"
+              >
+                {LANGUAGES.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.flag} {item.nativeName}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         </header>
 
@@ -604,21 +627,19 @@ export default function CreatePage() {
           {authReady && user ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm">
-                已登入 <span className="font-medium">{user.email}</span>
+                {copy.signedIn} <span className="font-medium">{user.email}</span>
               </p>
               <button
                 type="button"
                 onClick={signOut}
                 className="h-10 rounded-full border border-black/10 px-4 text-sm font-medium transition-colors hover:bg-black/[.04] dark:border-white/15 dark:hover:bg-white/[.08]"
               >
-                登出
+                {copy.signOut}
               </button>
             </div>
           ) : (
             <form className="flex flex-col gap-3" onSubmit={signIn}>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                登入後才能發布。題目會記在你的帳號下。
-              </p>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">{copy.signInHint}</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="flex flex-col gap-1 text-sm font-medium">
                   Email
@@ -632,7 +653,7 @@ export default function CreatePage() {
                   />
                 </label>
                 <label className="flex flex-col gap-1 text-sm font-medium">
-                  密碼
+                  {copy.password}
                   <input
                     type="password"
                     required
@@ -649,7 +670,7 @@ export default function CreatePage() {
                   disabled={!authReady || authPending}
                   className="h-10 rounded-full bg-foreground px-4 text-sm font-medium text-background disabled:opacity-50"
                 >
-                  登入
+                  {t("login")}
                 </button>
                 <button
                   type="button"
@@ -657,7 +678,7 @@ export default function CreatePage() {
                   onClick={signUp}
                   className="h-10 rounded-full border border-black/10 px-4 text-sm font-medium disabled:opacity-50 dark:border-white/15"
                 >
-                  註冊
+                  {copy.signUp}
                 </button>
               </div>
             </form>
@@ -674,23 +695,26 @@ export default function CreatePage() {
 
         {result ? (
           <section className="rounded-3xl border border-black/[.08] bg-white p-5 dark:border-white/[.12] dark:bg-zinc-950">
-            <h2 className="text-xl font-semibold">題目已發布</h2>
+            <h2 className="text-xl font-semibold">{copy.published}</h2>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span
                 className={`rounded-full px-3 py-1 text-sm font-semibold ${scoreBadgeClass(result.qualityScore)}`}
               >
-                {scoreBadgeText(result.qualityScore)}
+                {scoreBadgeText(result.qualityScore, copy)}
               </span>
               <button
                 type="button"
                 onClick={() => setScoreOpen(true)}
                 className="h-9 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[.08]"
               >
-                查看評分明細
+                {copy.viewScore}
               </button>
             </div>
             <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-              特寫 {formatKb(result.cropBytes)}，原圖 {formatKb(result.originalBytes)}
+              {fillTemplate(copy.sizeLine, {
+                crop: formatKb(result.cropBytes),
+                original: formatKb(result.originalBytes),
+              })}
             </p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <figure className="flex flex-col gap-2">
@@ -698,19 +722,19 @@ export default function CreatePage() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={result.cropUrl}
-                  alt="已上傳的特寫"
+                  alt={copy.cropAlt}
                   className="aspect-square w-full rounded-2xl object-cover"
                 />
-                <figcaption className="text-sm text-zinc-500">玩家看到的特寫</figcaption>
+                <figcaption className="text-sm text-zinc-500">{copy.cropCaption}</figcaption>
               </figure>
               <figure className="flex flex-col gap-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={result.originalUrl}
-                  alt="已上傳的原圖"
+                  alt={copy.originalAlt}
                   className="aspect-square w-full rounded-2xl object-cover"
                 />
-                <figcaption className="text-sm text-zinc-500">答對後揭曉的原圖</figcaption>
+                <figcaption className="text-sm text-zinc-500">{copy.originalCaption}</figcaption>
               </figure>
             </div>
             <button
@@ -721,7 +745,7 @@ export default function CreatePage() {
               }}
               className="mt-4 h-10 rounded-full bg-foreground px-4 text-sm font-medium text-background"
             >
-              再出一題
+              {copy.another}
             </button>
           </section>
         ) : null}
@@ -737,10 +761,10 @@ export default function CreatePage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 id="score-detail-title" className="text-xl font-semibold">
-                    評分明細
+                    {copy.scoreTitle}
                   </h2>
                   <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                    {scoreBadgeText(result.qualityScore)}
+                    {scoreBadgeText(result.qualityScore, copy)}
                   </p>
                 </div>
                 <button
@@ -748,13 +772,13 @@ export default function CreatePage() {
                   onClick={() => setScoreOpen(false)}
                   className="h-9 rounded-full px-3 text-sm font-medium text-zinc-500 hover:bg-black/[.04] dark:hover:bg-white/[.08]"
                 >
-                  關閉
+                  {copy.close}
                 </button>
               </div>
               <ul className="flex flex-col gap-3">
                 <li className="rounded-2xl border border-black/10 px-4 py-3 dark:border-white/15">
                   <p className="text-sm font-semibold">
-                    盲猜可解性 {result.breakdown.blind_guess.score}/40
+                    {copy.blindSolve} {result.breakdown.blind_guess.score}/40
                   </p>
                   <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-zinc-700 dark:text-zinc-300">
                     {(result.breakdown.ai_guesses.length > 0
@@ -767,24 +791,24 @@ export default function CreatePage() {
                 </li>
                 <li className="rounded-2xl border border-black/10 px-4 py-3 dark:border-white/15">
                   <p className="text-sm font-semibold">
-                    視覺特徵度 {result.breakdown.visual_richness.score}/25
+                    {copy.visualRich} {result.breakdown.visual_richness.score}/25
                   </p>
                   <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
-                    {result.breakdown.visual_richness.detail || "尚未留下特徵清晰度評估。"}
+                    {result.breakdown.visual_richness.detail || copy.noVisual}
                   </p>
                 </li>
                 <li className="rounded-2xl border border-black/10 px-4 py-3 dark:border-white/15">
                   <p className="text-sm font-semibold">
-                    干擾項品質 {result.breakdown.distractor_deception.score}/20
+                    {copy.distractorQuality} {result.breakdown.distractor_deception.score}/20
                   </p>
                   <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
-                    {result.breakdown.distractor_deception.detail || "尚未留下干擾項評估。"}
+                    {result.breakdown.distractor_deception.detail || copy.noDistractor}
                   </p>
                 </li>
                 <li className="rounded-2xl border border-black/10 px-4 py-3 dark:border-white/15">
                   <p className="text-sm font-semibold">
-                    社群合規 {result.breakdown.safety.score}/15 ·{" "}
-                    {result.breakdown.safety.violated ? "未通過" : "通過"}
+                    {copy.community} {result.breakdown.safety.score}/15 ·{" "}
+                    {result.breakdown.safety.violated ? copy.failedCheck : copy.passed}
                   </p>
                   {result.breakdown.safety.detail ? (
                     <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
@@ -795,7 +819,7 @@ export default function CreatePage() {
               </ul>
               {result.breakdown.suggestion ? (
                 <p className="rounded-2xl bg-zinc-100 px-4 py-3 text-sm dark:bg-white/10">
-                  <span className="font-semibold">AI 建議</span>
+                  <span className="font-semibold">{copy.aiSuggestion}</span>
                   <span className="mt-1 block">{result.breakdown.suggestion}</span>
                 </p>
               ) : null}
@@ -805,7 +829,7 @@ export default function CreatePage() {
 
         <form className="flex flex-col gap-8" onSubmit={onSubmit}>
           <label className="flex flex-col gap-2 text-sm font-medium">
-            作者名稱
+            {copy.authorLabel}
             <input
               value={authorName}
               maxLength={40}
@@ -813,20 +837,18 @@ export default function CreatePage() {
                 authorTouched.current = true;
                 setAuthorName(event.target.value);
               }}
-              placeholder="顯示在題目上的名字"
+              placeholder={copy.authorPlaceholder}
               className="h-11 rounded-xl border border-black/10 bg-white px-3 font-normal outline-none focus:border-zinc-950 dark:border-white/15 dark:bg-zinc-950 dark:focus:border-zinc-50"
             />
           </label>
 
           <section className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
-              <h2 className="text-lg font-semibold">圖片與特寫</h2>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                拖曳或滾輪拉近，白框裡的範圍就是玩家要猜的局部。
-              </p>
+              <h2 className="text-lg font-semibold">{copy.imageTitle}</h2>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">{copy.imageHint}</p>
             </div>
             <label className="flex h-12 w-fit cursor-pointer items-center rounded-full border border-black/10 px-5 text-sm font-medium transition-colors hover:bg-black/[.04] dark:border-white/15 dark:hover:bg-white/[.08]">
-              選擇圖片
+              {copy.pickImage}
               <input
                 type="file"
                 accept="image/*"
@@ -868,15 +890,15 @@ export default function CreatePage() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={imageUrl}
-                    alt="原圖預覽"
+                    alt={copy.originalPreviewAlt}
                     className="aspect-square w-full rounded-2xl object-cover"
                   />
                   <figcaption className="text-sm text-zinc-500">
-                    原圖，答對後揭曉
+                    {copy.originalReveal}
                   </figcaption>
                 </figure>
                 <label className="flex items-center gap-3 text-sm font-medium sm:col-span-2">
-                  <span className="shrink-0">拉近</span>
+                  <span className="shrink-0">{copy.zoom}</span>
                   <input
                     type="range"
                     min={1}
@@ -892,10 +914,8 @@ export default function CreatePage() {
           </section>
 
           <fieldset className="flex flex-col gap-4">
-            <legend className="text-lg font-semibold">四個選項</legend>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              標一個正解。每個選項都要有專屬吐槽，玩家選到才會看到。
-            </p>
+            <legend className="text-lg font-semibold">{copy.optionsTitle}</legend>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">{copy.optionsHint}</p>
             <div className="flex flex-col items-start gap-2">
               <button
                 type="button"
@@ -903,7 +923,7 @@ export default function CreatePage() {
                 onClick={() => void generateDistractors()}
                 className="h-11 rounded-full border border-black/10 px-4 text-sm font-semibold disabled:opacity-50 dark:border-white/15"
               >
-                {aiPending ? "生成中…" : "🤖 AI 一鍵生成干擾項與吐槽"}
+                {aiPending ? copy.aiPending : copy.aiButton}
               </button>
               {aiError ? (
                 <p role="alert" className="text-sm text-red-600 dark:text-red-400">
@@ -923,11 +943,12 @@ export default function CreatePage() {
                     checked={correctIndex === index}
                     onChange={() => setCorrectIndex(index)}
                   />
-                  選項 {index + 1}
-                  {correctIndex === index ? " · 正解" : ""}
+                  {fillTemplate(correctIndex === index ? copy.optionCorrect : copy.optionN, {
+                    n: index + 1,
+                  })}
                 </label>
                 <label className="flex flex-col gap-1 text-sm font-medium">
-                  選項文字
+                  {copy.optionText}
                   <input
                     value={option.optionText}
                     maxLength={120}
@@ -938,7 +959,7 @@ export default function CreatePage() {
                   />
                 </label>
                 <label className="flex flex-col gap-1 text-sm font-medium">
-                  吐槽詞
+                  {copy.tauntLabel}
                   <input
                     value={option.tauntText}
                     maxLength={280}
@@ -977,17 +998,17 @@ export default function CreatePage() {
           >
             <div className="flex flex-col gap-1">
               <h2 id="moderation-title" className="text-xl font-semibold">
-                這題還沒通過預審
+                {copy.moderationTitle}
               </h2>
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
                 {moderationReport.breakdown.safety.violated
-                  ? `安全合規未通過，總分已歸零。題目尚未發布。`
-                  : `綜合分數 ${moderationReport.qualityScore}/100，未達 60 分。題目尚未發布。`}
-                請依盲猜結果重新調整裁切，或修改正解與干擾項後再發布。
+                  ? copy.safetyZero
+                  : fillTemplate(copy.scoreLow, { score: moderationReport.qualityScore })}{" "}
+                {copy.adjustHint}
               </p>
             </div>
             <div className="rounded-2xl border border-black/10 px-4 py-3 dark:border-white/15">
-              <p className="text-sm font-semibold">AI 盲猜結果</p>
+              <p className="text-sm font-semibold">{copy.blindResult}</p>
               <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
                 {moderationReport.guesses.map((guess, index) => (
                   <li key={`${guess}-${index}`}>{guess}</li>
@@ -997,10 +1018,10 @@ export default function CreatePage() {
             <ul className="flex flex-col gap-3">
               {(
                 [
-                  ["盲猜測驗", moderationReport.breakdown.blind_guess],
-                  ["視覺特徵", moderationReport.breakdown.visual_richness],
-                  ["干擾項欺騙性", moderationReport.breakdown.distractor_deception],
-                  ["安全合規", moderationReport.breakdown.safety],
+                  [copy.blindTest, moderationReport.breakdown.blind_guess],
+                  [copy.visualShort, moderationReport.breakdown.visual_richness],
+                  [copy.deception, moderationReport.breakdown.distractor_deception],
+                  [copy.safetyShort, moderationReport.breakdown.safety],
                 ] as const
               ).map(([title, slice]) => (
                 <li
@@ -1016,7 +1037,7 @@ export default function CreatePage() {
             </ul>
             {moderationReport.suggestion ? (
               <p className="rounded-2xl bg-zinc-100 px-4 py-3 text-sm dark:bg-white/10">
-                <span className="font-semibold">改善建議</span>
+                <span className="font-semibold">{copy.improve}</span>
                 <span className="mt-1 block">{moderationReport.suggestion}</span>
               </p>
             ) : null}
@@ -1025,13 +1046,13 @@ export default function CreatePage() {
               onClick={() => setModerationReport(null)}
               className="h-11 rounded-full bg-foreground px-4 text-sm font-medium text-background"
             >
-              回去調整
+              {copy.backAdjust}
             </button>
             <Link
               href="/guidelines"
               className="text-center text-xs text-zinc-400 transition-colors hover:text-zinc-500 dark:text-zinc-500 dark:hover:text-zinc-400"
             >
-              查看完整審核標準
+              {copy.guidelines}
             </Link>
           </div>
         </div>

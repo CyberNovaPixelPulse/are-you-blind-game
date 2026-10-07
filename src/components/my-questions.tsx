@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { readStoredOptions } from "@/lib/question-options";
+import { quizImageUrl } from "@/lib/quiz-image";
 import { supabase } from "@/lib/supabase";
 
 type Work = {
@@ -17,7 +18,7 @@ type Work = {
 };
 
 function publicImageUrl(path: string) {
-  return supabase.storage.from("quiz-images").getPublicUrl(path).data.publicUrl;
+  return quizImageUrl(path);
 }
 
 function missingViewCount(message: string) {

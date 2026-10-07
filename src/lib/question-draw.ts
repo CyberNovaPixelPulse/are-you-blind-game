@@ -1,8 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isLanguageCode } from "@/lib/languages";
 import { readStoredOptions } from "@/lib/question-options";
 import { isQuestionId } from "@/lib/seen-questions";
 
 export const QUIZ_LANGUAGE = "zh-TW";
+export const MIN_LANGUAGE_POOL = 3;
 
 const QUESTION_COLUMNS =
   "id, crop_image_path, original_image_path, author_name, options, quality_score";
@@ -27,6 +29,7 @@ export type DrawResult = {
   question: DrawnQuestion | null;
   resetSeen: boolean;
   keepIds: string[];
+  thinLanguage?: boolean;
 };
 
 export type BatchDrawResult = {
@@ -34,6 +37,7 @@ export type BatchDrawResult = {
   questions: DrawnQuestion[];
   resetSeen: boolean;
   keepIds: string[];
+  thinLanguage?: boolean;
 };
 
 function missingColumn(message: string) {
@@ -163,29 +167,57 @@ async function loadAnsweredIds(db: SupabaseClient, userId: string) {
     .filter((id): id is string => typeof id === "string" && isQuestionId(id));
 }
 
-async function loadQuestions(db: SupabaseClient) {
-  const scored = await db
-    .from("questions")
-    .select(QUESTION_COLUMNS)
-    .eq("status", "active")
-    .eq("language", QUIZ_LANGUAGE)
-    .limit(1000);
+function mergeRows(base: RawQuestion[], extra: RawQuestion[]) {
+  const seen = new Set(base.map((row) => row.id));
+  const merged = [...base];
+  for (const row of extra) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    merged.push(row);
+  }
+  return merged;
+}
+
+async function loadQuestions(db: SupabaseClient, language: string | null) {
+  const run = (columns: string) => {
+    let query = db.from("questions").select(columns).eq("status", "active");
+    if (language) query = query.eq("language", language);
+    return query.limit(1000);
+  };
+  const scored = await run(QUESTION_COLUMNS);
   if (scored.error && missingColumn(scored.error.message)) {
-    const plain = await db
-      .from("questions")
-      .select(QUESTION_COLUMNS_PLAIN)
-      .eq("status", "active")
-      .eq("language", QUIZ_LANGUAGE)
-      .limit(1000);
+    const plain = await run(QUESTION_COLUMNS_PLAIN);
     return {
       error: plain.error?.message ?? "",
-      rows: (plain.data ?? []) as RawQuestion[],
+      rows: (plain.data ?? []) as unknown as RawQuestion[],
     };
   }
   return {
     error: scored.error?.message ?? "",
-    rows: (scored.data ?? []) as RawQuestion[],
+    rows: (scored.data ?? []) as unknown as RawQuestion[],
   };
+}
+
+async function loadPlayablePool(db: SupabaseClient, language: string) {
+  const primary = await loadQuestions(db, language);
+  if (primary.error) return { error: primary.error, rows: [] as RawQuestion[], thinLanguage: false };
+  if (primary.rows.length >= MIN_LANGUAGE_POOL) {
+    return { error: "", rows: primary.rows, thinLanguage: false };
+  }
+
+  let rows = primary.rows;
+  const fallbacks = ["en", "zh-TW"].filter((code) => code !== language);
+  for (const code of fallbacks) {
+    const more = await loadQuestions(db, code);
+    if (more.error) continue;
+    rows = mergeRows(rows, more.rows);
+    if (rows.length >= MIN_LANGUAGE_POOL) break;
+  }
+  if (rows.length < MIN_LANGUAGE_POOL) {
+    const any = await loadQuestions(db, null);
+    if (!any.error) rows = mergeRows(rows, any.rows);
+  }
+  return { error: "", rows, thinLanguage: true };
 }
 
 export async function drawManyFromDatabase(
@@ -196,12 +228,14 @@ export async function drawManyFromDatabase(
     avoidId?: string;
     userId?: string | null;
     count?: number;
+    language?: string | null;
   },
 ): Promise<BatchDrawResult> {
-  const loaded = await loadQuestions(db);
+  const language = isLanguageCode(input.language ?? "") ? input.language! : QUIZ_LANGUAGE;
+  const loaded = await loadPlayablePool(db, language);
   if (loaded.error) return { error: loaded.error, questions: [], resetSeen: false, keepIds: [] };
   const answeredIds = input.userId ? await loadAnsweredIds(db, input.userId) : [];
-  return pickQuestions(
+  const picked = pickQuestions(
     loaded.rows,
     input.seenIds,
     answeredIds,
@@ -209,11 +243,12 @@ export async function drawManyFromDatabase(
     input.reservedIds ?? [],
     input.count ?? 1,
   );
+  return { ...picked, thinLanguage: loaded.thinLanguage };
 }
 
 export async function drawFromDatabase(
   db: SupabaseClient,
-  input: { seenIds: string[]; avoidId?: string; userId?: string | null },
+  input: { seenIds: string[]; avoidId?: string; userId?: string | null; language?: string | null },
 ): Promise<DrawResult> {
   const batch = await drawManyFromDatabase(db, { ...input, count: 1 });
   return {
@@ -221,5 +256,6 @@ export async function drawFromDatabase(
     question: batch.questions[0] ?? null,
     resetSeen: batch.resetSeen,
     keepIds: batch.keepIds,
+    thinLanguage: batch.thinLanguage,
   };
 }

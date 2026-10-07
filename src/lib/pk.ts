@@ -1,5 +1,7 @@
 import type { User } from "@supabase/supabase-js";
+import { isLanguageCode } from "@/lib/languages";
 import { pickPkBot } from "@/lib/pk-bots";
+import { MIN_LANGUAGE_POOL } from "@/lib/question-draw";
 import { supabase } from "@/lib/supabase";
 
 export const PK_LANGUAGE = "zh-TW";
@@ -146,17 +148,45 @@ export async function saveMyPkScore(roomId: string, userId: string, question: nu
     .eq("user_id", userId);
 }
 
-export async function pickPkQuestionIds(limit = 5) {
-  const loaded = await supabase
-    .from("questions")
-    .select("id")
-    .eq("status", "active")
-    .eq("language", PK_LANGUAGE)
-    .limit(200);
+async function loadActiveQuestionIds(language: string | null) {
+  let query = supabase.from("questions").select("id").eq("status", "active");
+  if (language) query = query.eq("language", language);
+  const loaded = await query.limit(200);
   if (loaded.error) throw new Error(loaded.error.message);
-  const ids = (loaded.data ?? [])
+  return (loaded.data ?? [])
     .map((row) => row.id)
     .filter((id): id is string => typeof id === "string");
+}
+
+function uniqueIds(groups: string[][]) {
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const group of groups) {
+    for (const id of group) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      ids.push(id);
+    }
+  }
+  return ids;
+}
+
+export async function pickPkQuestionIds(limit = 5, language?: string) {
+  const code = language && isLanguageCode(language) ? language : PK_LANGUAGE;
+  const groups = [await loadActiveQuestionIds(code)];
+  let ids = uniqueIds(groups);
+  if (ids.length < MIN_LANGUAGE_POOL) {
+    for (const fallback of ["en", "zh-TW"]) {
+      if (fallback === code) continue;
+      groups.push(await loadActiveQuestionIds(fallback));
+      ids = uniqueIds(groups);
+      if (ids.length >= MIN_LANGUAGE_POOL) break;
+    }
+  }
+  if (ids.length < MIN_LANGUAGE_POOL) {
+    groups.push(await loadActiveQuestionIds(null));
+    ids = uniqueIds(groups);
+  }
   for (let index = ids.length - 1; index > 0; index -= 1) {
     const swapIndex = Math.floor(Math.random() * (index + 1));
     const current = ids[index];

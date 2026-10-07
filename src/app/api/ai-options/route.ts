@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { isLanguageCode, languageByCode, type LanguageCode } from "@/lib/languages";
 
 type GeneratedOption = {
   text: string;
@@ -51,13 +52,30 @@ function readModelJson(raw: string): unknown {
   return JSON.parse(withoutFence.slice(start, end + 1));
 }
 
-function readPayload(value: unknown, correctAnswer: string): GeneratedPayload | null {
+function limitsFor(language: LanguageCode) {
+  if (language === "zh-TW" || language === "zh-CN") {
+    return { text: 8, taunt: 40, praise: 20 };
+  }
+  return { text: 48, taunt: 160, praise: 80 };
+}
+
+function promptFor(language: LanguageCode) {
+  const info = languageByCode(language);
+  const limits = limitsFor(language);
+  return `${SYSTEM_PROMPT}
+
+Write correctTaunt, every option text, and every taunt only in ${info.nativeName} (${info.code}).
+These limits replace the character limits above: option text at most ${limits.text} characters, each taunt at most ${limits.taunt} characters, correctTaunt at most ${limits.praise} characters.`;
+}
+
+function readPayload(value: unknown, correctAnswer: string, language: LanguageCode): GeneratedPayload | null {
   if (!value || typeof value !== "object") return null;
   const praise = (value as { correctTaunt?: unknown }).correctTaunt;
   const options = (value as { options?: unknown }).options;
   if (typeof praise !== "string" || !Array.isArray(options)) return null;
 
-  const correctTaunt = clip(praise, 20);
+  const limits = limitsFor(language);
+  const correctTaunt = clip(praise, limits.praise);
   if (!correctTaunt) return null;
 
   const parsed: GeneratedOption[] = [];
@@ -67,8 +85,8 @@ function readPayload(value: unknown, correctAnswer: string): GeneratedPayload | 
     const text = (item as { text?: unknown }).text;
     const taunt = (item as { taunt?: unknown }).taunt;
     if (typeof text !== "string" || typeof taunt !== "string") continue;
-    const trimmedText = clip(text, 8);
-    const trimmedTaunt = clip(taunt, 40);
+    const trimmedText = clip(text, limits.text);
+    const trimmedTaunt = clip(taunt, limits.taunt);
     const key = trimmedText.toLowerCase();
     if (!trimmedText || !trimmedTaunt || seen.has(key)) continue;
     seen.add(key);
@@ -86,9 +104,13 @@ export async function POST(request: Request) {
   }
 
   let correctAnswer = "";
+  let language: LanguageCode = "zh-TW";
   try {
-    const body = (await request.json()) as { correctAnswer?: unknown };
+    const body = (await request.json()) as { correctAnswer?: unknown; language?: unknown };
     correctAnswer = typeof body.correctAnswer === "string" ? body.correctAnswer.trim() : "";
+    if (typeof body.language === "string" && isLanguageCode(body.language)) {
+      language = body.language;
+    }
   } catch {
     return Response.json({ message: "請提供正解名稱" }, { status: 400 });
   }
@@ -103,10 +125,10 @@ export async function POST(request: Request) {
       response_format: { type: "json_object" },
       temperature: 0.9,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: promptFor(language) },
         {
           role: "user",
-          content: `正解名稱：${correctAnswer}\n請依這個正解產出 3 個同類別、同句型的干擾項。每句 taunt 都要點出該干擾項和正解的關鍵差異，並嘲諷選了它的玩家。另外給一句正解誇獎。只回傳 JSON。`,
+          content: `正解名稱：${correctAnswer}\n目標語言：${languageByCode(language).nativeName} (${language})\n請依這個正解產出 3 個同類別、同句型的干擾項，而且 correctTaunt、text、taunt 全部只用這個語言。每句 taunt 都要點出該干擾項和正解的關鍵差異，並嘲諷選了它的玩家。另外給一句正解誇獎。只回傳 JSON。`,
         },
       ],
     });
@@ -114,7 +136,7 @@ export async function POST(request: Request) {
     if (!content) {
       return Response.json({ message: "AI 沒有回傳內容" }, { status: 502 });
     }
-    const generated = readPayload(readModelJson(content), correctAnswer);
+    const generated = readPayload(readModelJson(content), correctAnswer, language);
     if (!generated) {
       console.error("ai-options invalid json", content.slice(0, 500));
       return Response.json({ message: "AI 回傳的格式不正確" }, { status: 502 });

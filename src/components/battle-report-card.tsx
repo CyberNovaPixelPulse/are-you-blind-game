@@ -3,6 +3,7 @@
 import { toBlob } from "html-to-image";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLanguage } from "@/components/language-provider";
 import { supabase } from "@/lib/supabase";
 
 const SHARE_HOST = "areyoublind.game";
@@ -156,6 +157,7 @@ function BattleReportCard({
 }
 
 export function ShareShameButton({ report }: { report: ShameReport }) {
+  const { t } = useLanguage();
   const cardRef = useRef<HTMLDivElement>(null);
   const [rendering, setRendering] = useState(false);
   const [toast, setToast] = useState("");
@@ -290,7 +292,7 @@ export function ShareShameButton({ report }: { report: ShameReport }) {
         onClick={() => void share()}
         className="h-12 w-full rounded-full bg-gradient-to-r from-fuchsia-500 via-red-500 to-orange-400 text-sm font-black text-white shadow-[0_0_24px_rgba(244,63,94,0.7)] transition disabled:opacity-70"
       >
-        {rendering ? "戰報渲染中..." : "📸 分享我的屈辱（生成戰報）"}
+        {rendering ? "…" : `📸 ${t("shame")}`}
       </button>
       {stage}
     </>

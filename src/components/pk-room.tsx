@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { useLanguage } from "@/components/language-provider";
 import { pkAnswerScore, pkBotDelayMs } from "@/lib/pk-bots";
 import {
   addPkBot,
@@ -19,6 +20,7 @@ import {
   type PkRoom,
 } from "@/lib/pk";
 import { readStoredOptions, type QuizOption } from "@/lib/question-options";
+import { quizImageUrl } from "@/lib/quiz-image";
 import { recordQuestionView } from "@/lib/question-views";
 import { UserAvatar } from "@/components/user-avatar";
 import { supabase } from "@/lib/supabase";
@@ -33,7 +35,7 @@ type BattleQuestion = {
 };
 
 function publicImageUrl(path: string) {
-  return supabase.storage.from("quiz-images").getPublicUrl(path).data.publicUrl;
+  return quizImageUrl(path);
 }
 
 function shuffle<T>(items: T[]) {
@@ -99,6 +101,11 @@ function PkScoreboard({ players, total }: { players: PkPlayer[]; total: number }
 }
 
 export function PkRoom({ roomCode }: { roomCode: string }) {
+  const { language } = useLanguage();
+  const languageRef = useRef(language);
+  useEffect(() => {
+    languageRef.current = language;
+  }, [language]);
   const router = useRouter();
   const code = roomCode.toUpperCase();
   const [user, setUser] = useState<User | null>(null);
@@ -319,7 +326,7 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
     setStarting(true);
     setNotice("");
     try {
-      const ids = await pickPkQuestionIds(5);
+      const ids = await pickPkQuestionIds(5, languageRef.current);
       if (ids.length === 0) {
         setNotice("題庫還沒有可以對戰的題目");
         return;

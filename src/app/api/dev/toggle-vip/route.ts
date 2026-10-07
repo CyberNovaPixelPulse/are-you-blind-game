@@ -42,7 +42,14 @@ export async function POST(request: Request) {
     return Response.json({ error: "讀不到個人資料，請稍後再試。" }, { status: 400 });
   }
 
-  const nextVip = current.data.is_vip !== true;
+  let enable = false;
+  try {
+    const payload = (await request.clone().json()) as { enable?: unknown };
+    enable = payload?.enable === true;
+  } catch {
+    enable = false;
+  }
+  const nextVip = enable ? true : current.data.is_vip !== true;
   const updated = await db
     .from("profiles")
     .update({ is_vip: nextVip })

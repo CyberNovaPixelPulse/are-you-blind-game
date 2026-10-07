@@ -5,11 +5,12 @@ import { useEffect, useRef, useState } from "react";
 import { AdModal, usePlayerVip } from "@/components/ad-modal";
 import { SiteFooter } from "@/components/site-footer";
 import { QuestionReportButton, TAUNT_MEME_COUNT, TauntDialog } from "@/components/taunt-meme";
+import { useLanguage } from "@/components/language-provider";
 import { drawQuestions, recordAnsweredQuestion, type DrawnQuestion } from "@/lib/draw-question";
+import { quizImageUrl } from "@/lib/quiz-image";
 import { recordQuestionView } from "@/lib/question-views";
 import { readStoredOptions, type QuizOption } from "@/lib/question-options";
 import { rememberSeen, writeSeenIds } from "@/lib/seen-questions";
-import { supabase } from "@/lib/supabase";
 
 type Question = DrawnQuestion;
 
@@ -47,7 +48,7 @@ function shuffle<T>(items: T[]): T[] {
 }
 
 function publicImageUrl(path: string): string {
-  return supabase.storage.from("quiz-images").getPublicUrl(path).data.publicUrl;
+  return quizImageUrl(path);
 }
 
 function preloadPath(path: string, cache: Set<string>) {
@@ -73,7 +74,7 @@ function crossedStreakTier(streak: number) {
   return streak === 3 || streak === 5 || streak === 10;
 }
 
-function StreakFlame({ streak }: { streak: number }) {
+function StreakFlame({ streak, label }: { streak: number; label: string }) {
   if (streak >= 10) {
     return (
       <p className="relative shrink-0">
@@ -84,7 +85,7 @@ function StreakFlame({ streak }: { streak: number }) {
           <span className="animate-streak-burn inline-block text-lg" aria-hidden="true">
             🔥
           </span>
-          連勝 {streak} 題
+          {label}
         </span>
       </p>
     );
@@ -95,18 +96,18 @@ function StreakFlame({ streak }: { streak: number }) {
         <span className="animate-streak-burn inline-block" aria-hidden="true">
           🔥
         </span>
-        連勝 {streak} 題
+        {label}
       </p>
     );
   }
   if (streak >= 3) {
     return (
       <p className="shrink-0 animate-pulse text-sm font-semibold text-orange-600 [filter:drop-shadow(0_0_6px_rgba(249,115,22,0.9))] dark:text-orange-400">
-        🔥 連勝 {streak} 題
+        🔥 {label}
       </p>
     );
   }
-  return <p className="shrink-0 text-sm font-medium">🔥 連勝 {streak} 題</p>;
+  return <p className="shrink-0 text-sm font-medium">🔥 {label}</p>;
 }
 
 async function celebrate() {
@@ -130,6 +131,8 @@ async function celebrateMilestone() {
 }
 
 export default function PlayPage() {
+  const { language, t } = useLanguage();
+  const languageRef = useRef(language);
   const [question, setQuestion] = useState<Question | null>(null);
   const [options, setOptions] = useState<QuizOption[]>([]);
   const [guesses, setGuesses] = useState<Record<string, Guess>>({});
@@ -141,6 +144,7 @@ export default function PlayPage() {
   );
   const [errorMessage, setErrorMessage] = useState("");
   const [streak, setStreak] = useState(0);
+  const [thinLanguage, setThinLanguage] = useState(false);
   const [classicAnsweredCount, setClassicAnsweredCount] = useState(0);
   const [adOpen, setAdOpen] = useState(false);
   const [holdForVip, setHoldForVip] = useState(false);
@@ -153,6 +157,9 @@ export default function PlayPage() {
   const refillIdleRef = useRef(false);
   const refillResultRef = useRef<"ok" | "error" | "idle">("ok");
   const imageCacheRef = useRef(new Set<string>());
+  const streakLoadedRef = useRef(false);
+  const drawGenRef = useRef(0);
+  const fillingGenRef = useRef(0);
   questionRef.current = question;
 
   function preloadUpcoming() {
@@ -177,14 +184,24 @@ export default function PlayPage() {
   }
 
   async function refill() {
-    if (refillIdleRef.current) return refillResultRef.current;
+    const gen = drawGenRef.current;
+    if (refillIdleRef.current && fillingGenRef.current === gen) return refillResultRef.current;
     if (fillingRef.current) {
+      const flightGen = fillingGenRef.current;
       await fillingRef.current;
-      return refillResultRef.current;
+      if (drawGenRef.current !== gen) return "idle" as const;
+      if (flightGen === gen) return refillResultRef.current;
     }
+    if (drawGenRef.current !== gen) return "idle" as const;
     const task = (async () => {
       const reservedIds = queueRef.current.map((item) => item.question.id);
-      const drawn = await drawQuestions(POOL_SIZE, questionRef.current?.id, reservedIds);
+      const requested = languageRef.current;
+      const drawn = await drawQuestions(POOL_SIZE, questionRef.current?.id, reservedIds, requested);
+      if (drawGenRef.current !== gen || languageRef.current !== requested) {
+        refillResultRef.current = "idle";
+        return;
+      }
+      setThinLanguage(drawn.thinLanguage === true);
       if (drawn.error) {
         refillResultRef.current = "error";
         return;
@@ -215,6 +232,7 @@ export default function PlayPage() {
       refillResultRef.current = "ok";
       preloadUpcoming();
     })();
+    fillingGenRef.current = gen;
     fillingRef.current = task;
     try {
       await task;
@@ -225,6 +243,7 @@ export default function PlayPage() {
   }
 
   async function showNext() {
+    const gen = drawGenRef.current;
     refillIdleRef.current = false;
     setTauntOpen(false);
     setMiss(null);
@@ -232,12 +251,14 @@ export default function PlayPage() {
     setGuesses({});
     const next = queueRef.current.shift();
     if (next) {
+      if (drawGenRef.current !== gen) return;
       present(next);
       return;
     }
     setStatus("loading");
     setErrorMessage("");
     const outcome = await refill();
+    if (drawGenRef.current !== gen) return;
     const queued = queueRef.current.shift();
     if (queued) {
       present(queued);
@@ -296,13 +317,21 @@ export default function PlayPage() {
   }, [holdForVip, vipReady, isVip]);
 
   useEffect(() => {
+    languageRef.current = language;
+    drawGenRef.current += 1;
+    queueRef.current = [];
+    refillIdleRef.current = false;
     const timeout = window.setTimeout(() => {
-      const saved = Number(sessionStorage.getItem("quiz-streak") ?? "0");
-      if (Number.isFinite(saved) && saved > 0) setStreak(saved);
+      if (!streakLoadedRef.current) {
+        streakLoadedRef.current = true;
+        const saved = Number(sessionStorage.getItem("quiz-streak") ?? "0");
+        if (Number.isFinite(saved) && saved > 0) setStreak(saved);
+      }
+      setThinLanguage(false);
       void showNext();
     }, 0);
     return () => window.clearTimeout(timeout);
-  }, []);
+  }, [language]);
 
   useEffect(() => {
     if (!miss) return;
@@ -350,13 +379,18 @@ export default function PlayPage() {
           </Link>
           <p className="truncate text-sm text-zinc-500">{authorName}</p>
         </div>
-        <StreakFlame streak={streak} />
+        <StreakFlame streak={streak} label={t("streak", { n: streak })} />
       </header>
+      {thinLanguage ? (
+        <p className="mb-4 rounded-2xl border border-amber-300/50 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-300/30 dark:bg-amber-950/40 dark:text-amber-100">
+          {t("thinPool")}
+        </p>
+      ) : null}
       <div className="flex flex-1 flex-col justify-between gap-6 md:flex-row md:items-center md:gap-8">
       <section className="flex w-full flex-col gap-4 md:min-w-0 md:flex-1">
 
         {status === "loading" ? (
-          <p className="py-16 text-center text-sm text-zinc-500">正在抽題…</p>
+          <p className="py-16 text-center text-sm text-zinc-500">{t("drawing")}</p>
         ) : null}
 
         {status === "empty" ? (
@@ -393,7 +427,12 @@ export default function PlayPage() {
             />
             {solved ? (
               <p className="animate-[quiz-pop_0.4s_ease-out] absolute inset-x-4 bottom-4 rounded-full bg-emerald-500 px-4 py-2 text-center text-base font-semibold text-white shadow-lg">
-                答對了！
+                {t("correct")}
+              </p>
+            ) : null}
+            {miss && !solved ? (
+              <p className="absolute inset-x-4 bottom-4 rounded-full bg-red-500 px-4 py-2 text-center text-base font-semibold text-white shadow-lg">
+                {t("wrong")}
               </p>
             ) : null}
           </div>
@@ -468,11 +507,11 @@ export default function PlayPage() {
               onClick={goNextQuestion}
               className="h-16 rounded-full bg-foreground text-lg font-semibold text-background"
             >
-              下一題
+              {t("next")}
             </button>
             <QuestionReportButton
               questionId={question.id}
-              label="🚩 題目有問題？回報糾錯"
+              label={`🚩 ${t("report")}`}
               className="text-center text-xs font-medium text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
             />
           </>

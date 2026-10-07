@@ -14,12 +14,18 @@ import {
   widenAdminCookie,
 } from "@/app/admin/actions";
 import type { AdminQuestion } from "@/app/admin/types";
+import { isLanguageCode, languageByCode, SUPPORTED_LANGUAGES, type LanguageCode } from "@/lib/languages";
 import { DIFFICULTIES, isDifficulty, type Difficulty } from "@/lib/question-options";
 import { supabase } from "@/lib/supabase";
 
 type WriteResult = { ok: true } | { ok: false; message: string };
 
 const REPORT_HIDDEN_LABEL = "⛔ 已自動隱藏（檢舉過多）";
+
+function languageBadge(language: string) {
+  const code: LanguageCode = isLanguageCode(language) ? language : "zh-TW";
+  return `${languageByCode(code).flag} ${code}`;
+}
 
 function isReportHidden(question: {
   status: string;
@@ -266,7 +272,7 @@ export function AdminBoard({
   >("reports");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "hidden">("all");
   const [difficultyFilter, setDifficultyFilter] = useState<"all" | Difficulty>("all");
-  const [languageFilter, setLanguageFilter] = useState<"all" | "zh-TW" | "en" | "ja">("all");
+  const [languageFilter, setLanguageFilter] = useState<"all" | LanguageCode>("all");
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [clearedReports, setClearedReports] = useState<Set<string>>(new Set());
   const [statusOverride, setStatusOverride] = useState<Record<string, "active" | "hidden">>({});
@@ -954,15 +960,18 @@ export function AdminBoard({
               語言
               <select
                 value={languageFilter}
-                onChange={(event) =>
-                  setLanguageFilter(event.target.value as typeof languageFilter)
-                }
-                className="h-11 min-w-48 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none dark:border-white/15"
+                onChange={(event) => {
+                  const next = event.target.value;
+                  if (next === "all" || isLanguageCode(next)) setLanguageFilter(next);
+                }}
+                className="h-11 min-w-64 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none dark:border-white/15"
               >
-                <option value="all">全部語言</option>
-                <option value="zh-TW">繁體中文 (zh-TW)</option>
-                <option value="en">English (en)</option>
-                <option value="ja">日本語 (ja)</option>
+                <option value="all">全部語言 (All Languages)</option>
+                {SUPPORTED_LANGUAGES.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.flag} {item.nativeName} ({item.code})
+                  </option>
+                ))}
               </select>
             </label>
             <button
@@ -1044,7 +1053,7 @@ export function AdminBoard({
                         {question.difficulty}
                       </span>
                       <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-semibold text-sky-800 dark:text-sky-200">
-                        {question.language}
+                        {languageBadge(question.language)}
                       </span>
                       <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${scoreBadgeClass(question)}`}>
                         {scoreBadgeLabel(question)}

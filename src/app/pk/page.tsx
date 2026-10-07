@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { useLanguage } from "@/components/language-provider";
+import { VipPurchaseModal } from "@/components/vip-purchase-modal";
+import { fillTemplate } from "@/lib/ui-sections";
 import {
   addPkBot,
   loadPkIdentity,
@@ -18,7 +21,6 @@ import { supabase } from "@/lib/supabase";
 
 const ROOM_COLUMNS = "*";
 const MISSING_TABLE = "PK 資料表還沒建立，請先執行對戰 SQL。";
-const VIP_MODAL = "創建私人好友房為 VIP 專屬特權，升級 VIP 即可享受隨時開房開黑！";
 
 function fail(error: { code?: string; message: string }): never {
   throw Object.assign(new Error(error.message), { code: error.code });
@@ -41,6 +43,11 @@ function formatElapsed(ms: number) {
 }
 
 export default function PkLobbyPage() {
+  const { language, t } = useLanguage();
+  const languageRef = useRef(language);
+  useEffect(() => {
+    languageRef.current = language;
+  }, [language]);
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
@@ -284,7 +291,7 @@ export default function PkLobbyPage() {
       try {
         const bot = await addPkBot(room.id, [identity.username]);
         if (bot && stillSearching(generation)) {
-          const ids = await pickPkQuestionIds(5);
+          const ids = await pickPkQuestionIds(5, languageRef.current);
           if (ids.length > 0 && stillSearching(generation)) await startPkRoom(room.id, ids);
         }
       } catch (caught) {
@@ -328,7 +335,7 @@ export default function PkLobbyPage() {
     }
   }
 
-  async function toggleVipPreview() {
+  async function writeVip(mode: "toggle" | "enable") {
     if (!user) {
       void signIn();
       return;
@@ -345,7 +352,11 @@ export default function PkLobbyPage() {
     try {
       const response = await fetch("/api/dev/toggle-vip", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(mode === "enable" ? { "Content-Type": "application/json" } : {}),
+        },
+        body: mode === "enable" ? JSON.stringify({ enable: true }) : undefined,
       });
       const body = (await response.json().catch(() => null)) as { is_vip?: boolean; error?: string } | null;
       if (!response.ok || typeof body?.is_vip !== "boolean") {
@@ -360,6 +371,10 @@ export default function PkLobbyPage() {
     } finally {
       setVipBusy(false);
     }
+  }
+
+  function toggleVipPreview() {
+    void writeVip("toggle");
   }
 
   async function joinByCode() {
@@ -399,28 +414,26 @@ export default function PkLobbyPage() {
         className="inline-flex h-9 w-fit items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 dark:border-white/15 dark:text-zinc-300"
       >
         <span aria-hidden="true">←</span>
-        返回首頁
+        {t.pkLobby.backHome}
       </Link>
       <header>
         <p className="text-sm font-semibold tracking-[0.18em] text-rose-500 uppercase">PK</p>
-        <h1 className="mt-1 text-3xl font-black">⚔️ 多人 PK 對決</h1>
-        <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          隨機找一位對手，或用 4 碼房號跟朋友一起猜。
-        </p>
+        <h1 className="mt-1 text-3xl font-black">⚔️ {t.pkLobby.title}</h1>
+        <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{t.pkLobby.subtitle}</p>
       </header>
 
-      {!ready ? <p className="text-sm text-zinc-500">正在確認登入狀態…</p> : null}
+      {!ready ? <p className="text-sm text-zinc-500">{t.pkLobby.checkingLogin}</p> : null}
 
       {ready && !user ? (
         <section className="rounded-3xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950">
-          <p className="text-base font-medium">登入 Google 之後才能開始隨機匹配。加入好友房只要有房號即可。</p>
+          <p className="text-base font-medium">{t.pkLobby.loginHint}</p>
           <button
             type="button"
             disabled={busy === "login"}
             onClick={() => void signIn()}
             className="mt-4 h-12 w-full rounded-full bg-zinc-950 text-sm font-semibold text-white disabled:opacity-60 dark:bg-zinc-50 dark:text-zinc-950"
           >
-            使用 Google 登入
+            {t("login")}
           </button>
         </section>
       ) : null}
@@ -433,10 +446,8 @@ export default function PkLobbyPage() {
             onClick={() => void matchRandom()}
             className="rounded-3xl border border-amber-400/40 bg-amber-50 p-5 text-left disabled:opacity-60 dark:border-amber-300/30 dark:bg-amber-950/40"
           >
-            <h2 className="text-xl font-bold">⚡ 隨機匹配（1v1）</h2>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-amber-100/80">
-              立即搜尋全球線上玩家，滿 2 人極速開賽對決。
-            </p>
+            <h2 className="text-xl font-bold">⚡ {t.pkLobby.randomMatchTitle}</h2>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-amber-100/80">{t.pkLobby.randomMatchDesc}</p>
           </button>
           <button
             type="button"
@@ -450,18 +461,18 @@ export default function PkLobbyPage() {
           >
             {showVipLock ? (
               <span className="mb-2 inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800 dark:bg-amber-400/20 dark:text-amber-200">
-                👑 VIP 專屬開房特權
+                👑 {t.pkLobby.vipPrivilege}
               </span>
             ) : null}
-            <h2 className="text-xl font-bold">🏠 創建好友房</h2>
+            <h2 className="text-xl font-bold">🏠 {t.pkLobby.createRoomTitle}</h2>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
               {user && !profileReady
-                ? "正在確認開房資格…"
+                ? t.pkLobby.checkingHost
                 : busy === "create"
-                  ? "正在生成房號…"
+                  ? t.pkLobby.creatingCode
                   : showVipLock
-                    ? "私人好友房只開放給 VIP。"
-                    : "產生 4 碼房號，2 到 4 人由房長開賽。"}
+                    ? t.pkLobby.createRoomDesc
+                    : t.pkLobby.createRoomReady}
             </p>
           </button>
           {user && profileReady && isVip ? (
@@ -483,16 +494,16 @@ export default function PkLobbyPage() {
               void joinByCode();
             }}
           >
-            <h2 className="text-xl font-bold">🔑 加入房間</h2>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">輸入正確的 4 碼房號就能加入，不限 VIP。</p>
+            <h2 className="text-xl font-bold">🔑 {t.pkLobby.joinRoomTitle}</h2>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{t.pkLobby.joinRoomDesc}</p>
             <div className="mt-3 flex gap-2">
               <input
                 value={code}
                 onChange={(event) => setCode(normalizeRoomCode(event.target.value))}
                 maxLength={4}
                 autoCapitalize="characters"
-                placeholder="4 碼房號"
-                aria-label="4 碼房號"
+                placeholder={t.pkLobby.roomCodePlaceholder}
+                aria-label={t.pkLobby.roomCodePlaceholder}
                 className="h-12 min-w-0 flex-1 rounded-2xl border border-black/10 bg-transparent px-3 text-center text-lg font-black tracking-[0.4em] uppercase outline-none focus:border-zinc-950 dark:border-white/15 dark:focus:border-zinc-50"
               />
               <button
@@ -500,7 +511,7 @@ export default function PkLobbyPage() {
                 disabled={busy === "join" || busy === "create" || matching}
                 className="h-12 shrink-0 rounded-2xl bg-zinc-950 px-4 text-sm font-semibold text-white disabled:opacity-60 dark:bg-zinc-50 dark:text-zinc-950"
               >
-                進入房間
+                {t.pkLobby.enterRoomBtn}
               </button>
             </div>
           </form>
@@ -524,61 +535,33 @@ export default function PkLobbyPage() {
               <div className="absolute inset-[22%] rounded-full bg-zinc-950" />
               <div className="relative h-4 w-4 rounded-full bg-rose-400 shadow-[0_0_24px_rgba(251,113,133,0.9)]" />
             </div>
-            <p className="mt-8 text-sm font-semibold tracking-[0.22em] text-rose-300 uppercase">隨機匹配</p>
+            <p className="mt-8 text-sm font-semibold tracking-[0.22em] text-rose-300 uppercase">{t.pkLobby.matching}</p>
             <p aria-live="polite" className="mt-3 text-4xl font-black tabular-nums">
-              已搜尋：{formatElapsed(elapsedMs)}
+              {fillTemplate(t.pkLobby.searched, { time: formatElapsed(elapsedMs) })}
             </p>
-            <p className="mt-3 text-sm text-zinc-300">正在尋找實力相當的對手...</p>
+            <p className="mt-3 text-sm text-zinc-300">{t.pkLobby.finding}</p>
             <button
               type="button"
               disabled={summoning}
               onClick={cancelMatch}
               className="mt-8 h-12 rounded-full border border-white/20 px-6 text-sm font-semibold disabled:opacity-50"
             >
-              {summoning ? "即將開賽" : "取消匹配"}
+              {summoning ? t.pkLobby.startingSoon : t.pkLobby.cancelMatch}
             </button>
           </div>
         </div>
       ) : null}
 
       {vipPrompt ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-md"
-          role="presentation"
-          onClick={() => setVipPrompt(false)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="vip-room-title"
-            className="w-full max-w-sm rounded-3xl bg-white p-6 text-zinc-950 shadow-2xl dark:bg-zinc-950 dark:text-zinc-50"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 id="vip-room-title" className="text-xl font-black">
-              👑 VIP 專屬開房特權
-            </h2>
-            <p className="mt-3 text-sm leading-6">{VIP_MODAL}</p>
-            <button
-              type="button"
-              disabled={vipBusy}
-              onClick={() => void toggleVipPreview()}
-              className="mt-5 h-12 w-full rounded-full bg-amber-400 text-sm font-bold text-zinc-950 disabled:opacity-60"
-            >
-              {vipBusy ? "正在切換…" : user ? (isVip ? "一鍵關閉測試 VIP" : "一鍵切換測試 VIP") : "使用 Google 登入"}
-            </button>
-            <p className="mt-3 text-xs leading-5 text-zinc-500">
-              本機測試會改寫你的 profiles.is_vip。若按鈕失敗，到 Supabase 把這個欄位設成 true。
-            </p>
-            {vipNote ? <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">{vipNote}</p> : null}
-            <button
-              type="button"
-              onClick={() => setVipPrompt(false)}
-              className="mt-4 h-11 w-full rounded-full border border-black/10 text-sm font-semibold dark:border-white/15"
-            >
-              知道了
-            </button>
-          </div>
-        </div>
+        <VipPurchaseModal
+          onClose={() => setVipPrompt(false)}
+          onCheckout={() => {
+            void writeVip("enable");
+          }}
+          onTestToggle={() => void toggleVipPreview()}
+          testBusy={vipBusy}
+          testNote={vipNote}
+        />
       ) : null}
     </main>
   );

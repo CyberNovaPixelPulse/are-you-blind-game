@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLanguage } from "@/components/language-provider";
 import { ShareShameButton } from "@/components/battle-report-card";
 import { supabase } from "@/lib/supabase";
 
@@ -285,6 +286,7 @@ export function TauntDialog({
   questionNumber: number;
   onGiveUp: () => void;
 }) {
+  const { t } = useLanguage();
   const badge = badges[index % badges.length];
   const dialog = (
     <div className="animate-taunt-backdrop fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-md sm:items-center">
@@ -295,8 +297,9 @@ export function TauntDialog({
         className="animate-taunt-pop max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-red-500/30 bg-zinc-950/95 p-5 text-zinc-50 shadow-2xl shadow-red-500/20"
       >
         <h2 id="taunt-title" className="text-center text-2xl font-extrabold tracking-tight text-red-400">
-          {badge}
+          {t("wrong")}
         </h2>
+        <p className="mt-1 text-center text-sm font-semibold text-zinc-400">{badge}</p>
         <div className="mt-4 flex flex-col gap-2 text-sm font-semibold leading-6">
           <p className="rounded-xl border border-red-400/40 bg-red-500/15 px-3 py-2 text-red-100">
             ❌ 你的選擇：{pickedText}
@@ -327,11 +330,11 @@ export function TauntDialog({
           onClick={onGiveUp}
           className="mt-5 h-14 w-full rounded-2xl bg-gradient-to-r from-red-500 via-orange-500 to-amber-400 text-base font-bold text-white shadow-lg shadow-orange-500/30 transition duration-150 hover:brightness-110 active:scale-95"
         >
-          換下一題
+          {t("next")}
         </button>
         <QuestionReportButton
           questionId={questionId}
-          label="🚩 題目有爭議？回報糾錯"
+          label={`🚩 ${t("report")}`}
           className="mt-3 w-full text-center text-xs font-medium text-zinc-500 transition hover:text-zinc-300"
         />
       </div>

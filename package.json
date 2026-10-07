@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed:languages": "npx --yes tsx scripts/seed-30-languages.ts"
   },
   "dependencies": {
     "@google/genai": "^2.27.0",

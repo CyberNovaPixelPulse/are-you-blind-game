@@ -3,13 +3,16 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { useLanguage } from "@/components/language-provider";
 import { LeaderboardModal, PlayerAvatar } from "@/components/LeaderboardModal";
 import { loadLadder, type LeaderboardEntry } from "@/lib/leaderboard";
 import { supabase } from "@/lib/supabase";
 
-function rankTitle(rank: number) {
-  if (rank <= 3) return `👑 第 ${rank} 名`;
-  return `#${rank}`;
+function rankTitle(rank: number, prefix: string, suffix: string) {
+  const core = suffix.trim()
+    ? [prefix, String(rank), suffix].filter((part) => part.trim().length > 0).join(" ")
+    : `${prefix}${rank}`;
+  return rank <= 3 ? `👑 ${core}` : `#${rank}`;
 }
 
 function avatarFromUser(user: User) {
@@ -31,6 +34,7 @@ export function HonorCard({
   openRequest?: number;
   showChallengeLink?: boolean;
 }) {
+  const { t } = useLanguage();
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -78,10 +82,10 @@ export function HonorCard({
         <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold tracking-[0.18em] text-amber-300/90 uppercase">Honor</p>
-            <h2 className="mt-1 text-lg font-black text-amber-100">🏆 個人榮譽卡</h2>
-            {!ready ? <p className="mt-2 text-sm text-amber-100/70">正在讀取戰績…</p> : null}
+            <h2 className="mt-1 text-lg font-black text-amber-100">🏆 {t.honorCard.title}</h2>
+            {!ready ? <p className="mt-2 text-sm text-amber-100/70">{t.honorCard.loading}</p> : null}
             {ready && !user ? (
-              <p className="mt-2 text-sm leading-6 text-amber-50/90">登入以記錄挑戰模式積分與名次</p>
+              <p className="mt-2 text-sm leading-6 text-amber-50/90">{t.honorCard.signInHint}</p>
             ) : null}
             {ready && user && unavailable ? (
               <p className="mt-2 text-sm leading-6 text-amber-50/90">排行榜資料表還沒建立，打完的分數會先留在這一局。</p>
@@ -89,7 +93,7 @@ export function HonorCard({
             {ready && user && !unavailable && !me ? (
               <div className="mt-3 flex items-center gap-3">
                 <PlayerAvatar name={profile?.name ?? "玩家"} src={profile?.src ?? null} className="h-12 w-12 text-lg" />
-                <p className="text-sm leading-6 text-amber-50">尚未進入挑戰榜，立即挑戰飆分！</p>
+                <p className="text-sm leading-6 text-amber-50">{t.honorCard.unranked}</p>
               </div>
             ) : null}
             {ready && me ? (
@@ -102,10 +106,14 @@ export function HonorCard({
                 />
                 <div className="min-w-0">
                   <p className="text-2xl font-black text-amber-200 drop-shadow-[0_0_10px_rgba(251,191,36,0.65)]">
-                    {rankTitle(me.rank)}
+                    {rankTitle(me.rank, t.honorCard.rankPrefix, t.honorCard.rankSuffix)}
                   </p>
-                  <p className="mt-1 text-sm font-semibold">⚡ {me.total_score.toLocaleString("zh-TW")} 分</p>
-                  <p className="text-xs text-amber-100/80">🔥 最高連勝 {me.streak_count}</p>
+                  <p className="mt-1 text-sm font-semibold">
+                    ⚡ {me.total_score.toLocaleString()} {t.honorCard.points}
+                  </p>
+                  <p className="text-xs text-amber-100/80">
+                    🔥 {t.honorCard.maxStreak} {me.streak_count}
+                  </p>
                 </div>
               </div>
             ) : null}
@@ -118,7 +126,7 @@ export function HonorCard({
                 onClick={() => void signIn()}
                 className="h-10 rounded-full bg-amber-300 px-4 text-sm font-bold text-zinc-950 disabled:opacity-60"
               >
-                使用 Google 登入
+                {t("login")}
               </button>
             ) : null}
             {ready && user && !unavailable && !me && showChallengeLink ? (
@@ -126,7 +134,7 @@ export function HonorCard({
                 href="/challenge"
                 className="inline-flex h-10 items-center rounded-full bg-amber-300 px-4 text-sm font-bold text-zinc-950"
               >
-                立即挑戰
+                {t.challengeMode.startBtn}
               </Link>
             ) : null}
             <button
@@ -134,7 +142,7 @@ export function HonorCard({
               onClick={() => setOpen(true)}
               className="h-10 rounded-full border border-amber-200/50 px-4 text-sm font-semibold text-amber-100"
             >
-              完整天梯榜 ➔
+              {t.honorCard.leaderboardBtn}
             </button>
           </div>
         </div>
