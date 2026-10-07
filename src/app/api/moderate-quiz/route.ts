@@ -327,7 +327,7 @@ export async function POST(request: Request) {
     return Response.json({ message: "正解名稱需要 1 到 120 個字" }, { status: 400 });
   }
   if (!distractors) {
-    return Response.json({ message: "請提供 3 個不重複的干擾項與吐槽" }, { status: 400 });
+    return Response.json({ message: "請提供 3 個不重複的干擾項與毒舌評語" }, { status: 400 });
   }
   if (!image) {
     return Response.json(

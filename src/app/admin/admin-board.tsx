@@ -211,7 +211,7 @@ function draftError(draft: QuestionDraft): string {
   for (const option of draft.options) {
     const text = option.text.trim();
     if (text.length < 1 || text.length > 120) return "每個選項請填 1 到 120 字。";
-    if (option.tauntText.trim().length > 280) return "吐槽詞請在 280 字以內。";
+    if (option.tauntText.trim().length > 280) return "毒舌評語請在 280 字以內。";
   }
   return "";
 }
@@ -571,7 +571,7 @@ export function AdminBoard({
     if (distractors.some((option) => !option.text.trim() || !option.tauntText.trim())) {
       setErrors((current) => ({
         ...current,
-        [question.id]: "干擾項和吐槽都要有內容，才能重新診斷。",
+        [question.id]: "干擾項和毒舌評語都要有內容，才能重新診斷。",
       }));
       return;
     }
@@ -1174,7 +1174,7 @@ export function AdminBoard({
                             />
                           </label>
                           <label className="mt-3 block text-sm font-semibold">
-                            吐槽詞
+                            專屬毒舌評語
                             <textarea
                               value={option.tauntText}
                               maxLength={280}
@@ -1213,7 +1213,7 @@ export function AdminBoard({
                             />
                           </label>
                           <label className="mt-3 block text-sm font-semibold">
-                            吐槽詞
+                            專屬毒舌評語
                             <textarea
                               value={option.tauntText}
                               maxLength={280}
@@ -1229,7 +1229,7 @@ export function AdminBoard({
                         <div key={option.id} className="rounded-2xl bg-red-500/10 px-4 py-3 text-red-200">
                           <p className="font-semibold">{option.text}</p>
                           <p className="mt-1 text-sm leading-6">
-                            {option.tauntText ? `「${option.tauntText}」` : "（沒有吐槽詞）"}
+                            {option.tauntText ? `「${option.tauntText}」` : "（沒有毒舌評語）"}
                           </p>
                         </div>
                       ),
@@ -1345,7 +1345,7 @@ export function AdminBoard({
                               </p>
                             </li>
                             <li className="rounded-xl bg-black/20 px-3 py-2">
-                              <p className="font-semibold">干擾項與吐槽 {diagnosis.distractor}/20</p>
+                              <p className="font-semibold">干擾項與毒舌評語 {diagnosis.distractor}/20</p>
                             </li>
                             <li className="rounded-xl bg-black/20 px-3 py-2">
                               <p className="font-semibold">
