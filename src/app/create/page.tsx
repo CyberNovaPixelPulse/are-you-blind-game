@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Area, Point } from "react-easy-crop";
 import type { User } from "@supabase/supabase-js";
-import { cropToFile, compressCloseupToWebp, compressToWebp, cropToAiJpegBase64 } from "@/lib/image";
+import { cropToFile, compressCloseupToWebp, compressOriginalImage, cropToAiJpegBase64 } from "@/lib/image";
 import type { CreateQuizCopy } from "@/lib/create-copy";
 import { isLanguageCode, LANGUAGES, type LanguageCode } from "@/lib/languages";
 import { fillTemplate } from "@/lib/ui-sections";
@@ -513,15 +513,13 @@ export default function CreatePage() {
         return;
       }
 
-      const originalFile = await compressToWebp(sourceFile, "original.webp").catch(
-        () => {
-          throw new Error(copy.originalCompressFail);
-        },
-      );
+      const originalFile = await compressOriginalImage(sourceFile, "original.webp");
+      const originalType = originalFile.type === "image/jpeg" ? "image/jpeg" : "image/webp";
+      const originalExt = originalType === "image/jpeg" ? "jpg" : "webp";
 
       questionId = crypto.randomUUID();
       const cropPath = `${currentUser.id}/${questionId}/crop.${cropExt}`;
-      const originalPath = `${currentUser.id}/${questionId}/original.webp`;
+      const originalPath = `${currentUser.id}/${questionId}/original.${originalExt}`;
 
       setPhase("uploading");
       const cropUpload = await supabase.storage
@@ -536,7 +534,7 @@ export default function CreatePage() {
       const originalUpload = await supabase.storage
         .from("quiz-images")
         .upload(originalPath, originalFile, {
-          contentType: "image/webp",
+          contentType: originalType,
           upsert: false,
         });
       if (originalUpload.error) throw new Error(originalUpload.error.message);

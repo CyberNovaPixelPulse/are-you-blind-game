@@ -5,6 +5,17 @@ export const MAX_IMAGE_BYTES = 150 * 1024;
 
 const WEBP_ERROR = "圖片必須是 150KB 以內的 WebP";
 const CLOSEUP_MAX_BYTES = 140 * 1024;
+const ORIGINAL_TARGET_BYTES = 250 * 1024;
+const ORIGINAL_MAX_BYTES = 300 * 1024;
+
+const ORIGINAL_STEPS = [
+  { edge: 1200, quality: 0.75 },
+  { edge: 1000, quality: 0.65 },
+  { edge: 800, quality: 0.55 },
+  { edge: 640, quality: 0.45 },
+  { edge: 480, quality: 0.4 },
+  { edge: 360, quality: 0.35 },
+] as const;
 
 const CLOSEUP_STEPS = [
   { edge: 800, quality: 0.75 },
@@ -142,6 +153,27 @@ async function jpegFileToWebp(file: File, edge: number, quality: number) {
   return null;
 }
 
+async function exportOriginalCanvas(canvas: HTMLCanvasElement, quality: number): Promise<File | null> {
+  const webpBlob = await canvasToBlob(canvas, "image/webp", quality);
+  if (webpBlob && webpBlob.size > 0 && (await isWebpFile(webpBlob))) {
+    return fileFromBlob(webpBlob, "original.webp", "image/webp");
+  }
+
+  const jpegBlob = await canvasToBlob(canvas, "image/jpeg", quality);
+  if (jpegBlob && jpegBlob.size > 0) {
+    return fileFromBlob(jpegBlob, "original.jpg", "image/jpeg");
+  }
+
+  console.error("original export produced no blob", {
+    width: canvas.width,
+    height: canvas.height,
+    quality,
+    webpBytes: webpBlob?.size ?? null,
+    jpegBytes: jpegBlob?.size ?? null,
+  });
+  return null;
+}
+
 async function exportCanvas(canvas: HTMLCanvasElement, quality: number): Promise<File | null> {
   const webpBlob = await canvasToBlob(canvas, "image/webp", quality);
   if (webpBlob && webpBlob.size > 0 && (await isWebpFile(webpBlob))) {
@@ -194,6 +226,58 @@ async function renderCrop(
   const canvas = drawCrop(source, crop, edge);
   if (!canvas) return null;
   return exportCanvas(canvas, quality);
+}
+
+function namedOriginal(file: File, filename: string) {
+  const type = file.type === "image/jpeg" ? "image/jpeg" : "image/webp";
+  const name = type === "image/jpeg" ? "original.jpg" : filename;
+  return fileFromBlob(file, name, type);
+}
+
+export async function compressOriginalImage(file: File, filename = "original.webp"): Promise<File> {
+  if (
+    file.size > 0 &&
+    file.size <= ORIGINAL_MAX_BYTES &&
+    (file.type === "image/webp" || file.type === "image/jpeg")
+  ) {
+    return namedOriginal(file, filename);
+  }
+
+  const image = await loadFile(file);
+  const crop = {
+    x: 0,
+    y: 0,
+    width: Math.max(1, image.naturalWidth || image.width),
+    height: Math.max(1, image.naturalHeight || image.height),
+  };
+  const produced: File[] = [];
+  let withinCeiling: File | null = null;
+
+  for (const step of ORIGINAL_STEPS) {
+    const canvas = drawCrop(image, crop, step.edge);
+    const encoded = canvas ? await exportOriginalCanvas(canvas, step.quality) : null;
+    if (!encoded || encoded.size < 1) continue;
+    produced.push(encoded);
+    if (encoded.size <= ORIGINAL_TARGET_BYTES) {
+      return namedOriginal(encoded, filename);
+    }
+    if (encoded.size <= ORIGINAL_MAX_BYTES && !withinCeiling) withinCeiling = encoded;
+  }
+
+  if (withinCeiling) return namedOriginal(withinCeiling, filename);
+
+  const smallest = produced.reduce<File | null>(
+    (best, item) => (!best || item.size < best.size ? item : best),
+    null,
+  );
+  if (smallest) return namedOriginal(smallest, filename);
+
+  console.error("original export produced no blob", {
+    width: crop.width,
+    height: crop.height,
+    sourceBytes: file.size,
+  });
+  throw new Error("圖片輸出失敗");
 }
 
 export async function compressCloseupToWebp(file: File, filename: string): Promise<File> {
