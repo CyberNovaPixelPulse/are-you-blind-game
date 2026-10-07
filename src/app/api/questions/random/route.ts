@@ -17,7 +17,7 @@ function seenIdsFrom(value: unknown, limit = 4000) {
 
 function batchCount(value: unknown) {
   if (typeof value !== "number" || !Number.isInteger(value)) return 1;
-  return Math.min(5, Math.max(1, value));
+  return Math.min(10, Math.max(1, value));
 }
 
 function languageFrom(value: unknown) {
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
   const avoidId = typeof body.avoidId === "string" && isQuestionId(body.avoidId) ? body.avoidId : undefined;
   const drawn = await drawManyFromDatabase(db, {
     seenIds: seenIdsFrom(body.seenIds),
-    reservedIds: seenIdsFrom(body.reservedIds, 20),
+    reservedIds: seenIdsFrom(body.reservedIds, 40),
     avoidId,
     userId,
     count: batchCount(body.count),

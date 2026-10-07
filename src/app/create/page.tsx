@@ -472,7 +472,12 @@ export default function CreatePage() {
       setPhase("compressing");
 
       const cropped = await cropToFile(imageUrl, croppedAreaPixels);
-      const cropFile = await compressCloseupToWebp(cropped, "crop.webp");
+      const cropFile = await compressCloseupToWebp(
+        cropped,
+        cropped.type === "image/jpeg" ? "crop.jpg" : "crop.webp",
+      );
+      const cropType = cropFile.type === "image/jpeg" ? "image/jpeg" : "image/webp";
+      const cropExt = cropType === "image/jpeg" ? "jpg" : "webp";
 
       setPhase("moderating");
       const correctAnswer = options[correctIndex]?.optionText.trim() ?? "";
@@ -488,7 +493,7 @@ export default function CreatePage() {
               taunt: option.tauntText.trim(),
             })),
           imageBase64: await fileToBase64(cropFile),
-          mimeType: "image/webp",
+          mimeType: cropType,
         }),
       });
       const moderation = (await moderationResponse.json()) as {
@@ -515,14 +520,14 @@ export default function CreatePage() {
       );
 
       questionId = crypto.randomUUID();
-      const cropPath = `${currentUser.id}/${questionId}/crop.webp`;
+      const cropPath = `${currentUser.id}/${questionId}/crop.${cropExt}`;
       const originalPath = `${currentUser.id}/${questionId}/original.webp`;
 
       setPhase("uploading");
       const cropUpload = await supabase.storage
         .from("quiz-images")
         .upload(cropPath, cropFile, {
-          contentType: "image/webp",
+          contentType: cropType,
           upsert: false,
         });
       if (cropUpload.error) throw new Error(cropUpload.error.message);

@@ -51,97 +51,200 @@ async function isWebpFile(file: Blob) {
   return riff === "RIFF" && format === "WEBP";
 }
 
+const CROP_MAX_EDGE = 800;
+
+function finiteNumber(value: number, fallback: number) {
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function safeCrop(area: Area, imageWidth: number, imageHeight: number) {
+  const imageW = Math.max(1, Math.round(finiteNumber(imageWidth, 1)));
+  const imageH = Math.max(1, Math.round(finiteNumber(imageHeight, 1)));
+  let width = finiteNumber(area?.width, imageW);
+  let height = finiteNumber(area?.height, imageH);
+  let x = finiteNumber(area?.x, 0);
+  let y = finiteNumber(area?.y, 0);
+  if (width <= 0) width = imageW;
+  if (height <= 0) height = imageH;
+  x = Math.min(Math.max(0, x), imageW - 1);
+  y = Math.min(Math.max(0, y), imageH - 1);
+  width = Math.min(width, imageW - x);
+  height = Math.min(height, imageH - y);
+  if (width <= 0) width = imageW;
+  if (height <= 0) height = imageH;
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.max(1, Math.round(width)),
+    height: Math.max(1, Math.round(height)),
+  };
+}
+
 function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number) {
   return new Promise<Blob | null>((resolve) => {
-    canvas.toBlob((result) => resolve(result), type, quality);
+    let settled = false;
+    const finish = (blob: Blob | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(blob);
+    };
+    try {
+      canvas.toBlob((result) => finish(result), type, quality);
+    } catch (error) {
+      console.error("canvas.toBlob failed", {
+        type,
+        quality,
+        width: canvas.width,
+        height: canvas.height,
+        error,
+      });
+      finish(null);
+      return;
+    }
+    window.setTimeout(() => {
+      if (settled) return;
+      console.error("canvas.toBlob timed out", {
+        type,
+        quality,
+        width: canvas.width,
+        height: canvas.height,
+      });
+      finish(null);
+    }, 4000);
   });
 }
 
-async function encodeWebp(
-  source: CanvasImageSource,
-  sourceWidth: number,
-  sourceHeight: number,
-  edge: number,
-  quality: number,
-  filename: string,
-): Promise<File | null> {
-  const scale = Math.min(1, edge / Math.max(sourceWidth, sourceHeight));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
-  canvas.height = Math.max(1, Math.round(sourceHeight * scale));
-  const context = canvas.getContext("2d");
-  if (!context) return null;
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = "high";
-  context.drawImage(source, 0, 0, canvas.width, canvas.height);
+function fileFromBlob(blob: Blob, filename: string, type: string) {
+  return new File([blob], filename, { type, lastModified: Date.now() });
+}
 
-  const direct = await canvasToBlob(canvas, "image/webp", quality);
-  if (direct && (await isWebpFile(direct))) {
-    return new File([direct], filename, { type: "image/webp", lastModified: Date.now() });
-  }
-
-  const png = await canvasToBlob(canvas, "image/png");
-  if (!png) return null;
-  const fallbackSource = new File([png], "closeup.png", { type: "image/png" });
+async function jpegFileToWebp(file: File, edge: number, quality: number) {
+  const options = {
+    maxSizeMB: MAX_IMAGE_BYTES / (1024 * 1024),
+    maxWidthOrHeight: Math.max(1, edge),
+    fileType: "image/webp" as const,
+    initialQuality: quality,
+    maxIteration: 8,
+    alwaysKeepResolution: false,
+  };
   try {
     let compressed: File;
     try {
-      compressed = await imageCompression(fallbackSource, {
-        maxSizeMB: 1,
-        maxWidthOrHeight: Math.max(canvas.width, canvas.height),
-        fileType: "image/webp",
-        initialQuality: quality,
-        maxIteration: 1,
-        useWebWorker: true,
-        alwaysKeepResolution: true,
-      });
+      compressed = await imageCompression(file, { ...options, useWebWorker: true });
     } catch {
-      compressed = await imageCompression(fallbackSource, {
-        maxSizeMB: 1,
-        maxWidthOrHeight: Math.max(canvas.width, canvas.height),
-        fileType: "image/webp",
-        initialQuality: quality,
-        maxIteration: 1,
-        useWebWorker: false,
-        alwaysKeepResolution: true,
-      });
+      compressed = await imageCompression(file, { ...options, useWebWorker: false });
     }
-    const webp = new File([compressed], filename, { type: "image/webp", lastModified: Date.now() });
+    const webp = fileFromBlob(compressed, "crop.webp", "image/webp");
     if (webp.size > 0 && (await isWebpFile(webp))) return webp;
-  } catch {
-    return null;
+  } catch (error) {
+    console.error("jpeg to webp failed", { edge, quality, bytes: file.size, error });
   }
   return null;
 }
 
+async function exportCanvas(canvas: HTMLCanvasElement, quality: number): Promise<File | null> {
+  const webpBlob = await canvasToBlob(canvas, "image/webp", quality);
+  if (webpBlob && webpBlob.size > 0 && (await isWebpFile(webpBlob))) {
+    return fileFromBlob(webpBlob, "crop.webp", "image/webp");
+  }
+
+  const jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.75);
+  if (!jpegBlob || jpegBlob.size < 1) {
+    console.error("canvas export produced no blob", {
+      width: canvas.width,
+      height: canvas.height,
+      quality,
+      webpBytes: webpBlob?.size ?? null,
+      jpegBytes: jpegBlob?.size ?? null,
+    });
+    return null;
+  }
+
+  const jpegFile = fileFromBlob(jpegBlob, "crop.jpg", "image/jpeg");
+  const converted = await jpegFileToWebp(jpegFile, Math.max(canvas.width, canvas.height), quality);
+  return converted ?? jpegFile;
+}
+
+function drawCrop(
+  source: CanvasImageSource,
+  crop: { x: number; y: number; width: number; height: number },
+  edge: number,
+) {
+  const scale = Math.min(1, edge / Math.max(crop.width, crop.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(crop.width * scale));
+  canvas.height = Math.max(1, Math.round(crop.height * scale));
+  const context = canvas.getContext("2d");
+  if (!context) {
+    console.error("canvas.getContext failed", { edge, crop });
+    return null;
+  }
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(source, crop.x, crop.y, crop.width, crop.height, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+async function renderCrop(
+  source: CanvasImageSource,
+  crop: { x: number; y: number; width: number; height: number },
+  edge: number,
+  quality: number,
+) {
+  const canvas = drawCrop(source, crop, edge);
+  if (!canvas) return null;
+  return exportCanvas(canvas, quality);
+}
+
 export async function compressCloseupToWebp(file: File, filename: string): Promise<File> {
+  if (file.size > 0 && file.size <= MAX_IMAGE_BYTES) {
+    return fileFromBlob(file, filename, file.type || "image/webp");
+  }
+
   const image = await loadFile(file);
-  const width = image.naturalWidth || image.width;
-  const height = image.naturalHeight || image.height;
-  let clearest: File | null = null;
+  const crop = {
+    x: 0,
+    y: 0,
+    width: Math.max(1, image.naturalWidth || image.width),
+    height: Math.max(1, image.naturalHeight || image.height),
+  };
+  const produced: File[] = [];
+  const legalFiles: File[] = [];
+  const take = (encoded: File | null) => {
+    if (!encoded || encoded.size < 1) return null;
+    produced.push(encoded);
+    if (encoded.size <= MAX_IMAGE_BYTES) legalFiles.push(encoded);
+    return encoded.size <= CLOSEUP_MAX_BYTES ? encoded : null;
+  };
 
   for (const step of CLOSEUP_STEPS) {
-    const encoded = await encodeWebp(image, width, height, step.edge, step.quality, filename);
-    if (!encoded || encoded.size > MAX_IMAGE_BYTES) continue;
-    if (!clearest || encoded.size > clearest.size) clearest = encoded;
-    if (encoded.size <= CLOSEUP_MAX_BYTES) return encoded;
+    const ready = take(await renderCrop(image, crop, step.edge, step.quality));
+    if (!ready) continue;
+    return fileFromBlob(ready, filename, ready.type || "image/jpeg");
   }
 
   let edge = 400;
   let quality = 0.4;
-  let fitted = clearest;
-  while (edge >= 160) {
-    const encoded = await encodeWebp(image, width, height, edge, quality, filename);
-    if (encoded && encoded.size <= CLOSEUP_MAX_BYTES) return encoded;
-    if (encoded && encoded.size <= MAX_IMAGE_BYTES && (!fitted || encoded.size < fitted.size)) {
-      fitted = encoded;
-    }
+  while (edge >= 96) {
+    const ready = take(await renderCrop(image, crop, edge, quality));
+    if (ready) return fileFromBlob(ready, filename, ready.type || "image/jpeg");
     edge = Math.round(edge * 0.75);
     quality = Math.max(0.3, quality - 0.05);
   }
 
-  if (fitted) return fitted;
-  throw new Error("無法輸出裁切圖");
+  const legal = legalFiles.reduce<File | null>(
+    (best, file) => (!best || file.size < best.size ? file : best),
+    null,
+  );
+  if (legal) return fileFromBlob(legal, filename, legal.type || "image/jpeg");
+
+  const fallback = produced.reduce<File | null>(
+    (best, file) => (!best || file.size < best.size ? file : best),
+    null,
+  );
+  if (fallback) return fileFromBlob(fallback, filename, fallback.type || "image/jpeg");
+  console.error("close-up export produced no blob", { width: crop.width, height: crop.height, sourceBytes: file.size });
+  throw new Error("圖片輸出失敗");
 }
 
 async function loadFile(file: File) {
@@ -164,41 +267,11 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
 export async function cropToFile(imageSrc: string, area: Area): Promise<File> {
   const image = await loadImage(imageSrc);
-  const sourceWidth = Math.max(1, Math.round(area.width));
-  const sourceHeight = Math.max(1, Math.round(area.height));
-  const scale = Math.min(1, 1600 / Math.max(sourceWidth, sourceHeight));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
-  canvas.height = Math.max(1, Math.round(sourceHeight * scale));
-
-  const context = canvas.getContext("2d");
-  if (!context) {
-    throw new Error("無法裁切圖片");
-  }
-
-  context.drawImage(
-    image,
-    Math.round(area.x),
-    Math.round(area.y),
-    sourceWidth,
-    sourceHeight,
-    0,
-    0,
-    canvas.width,
-    canvas.height,
-  );
-
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((result) => {
-      if (!result) {
-        reject(new Error("無法輸出裁切圖"));
-        return;
-      }
-      resolve(result);
-    }, "image/png");
-  });
-
-  return new File([blob], "crop.png", { type: "image/png" });
+  const crop = safeCrop(area, image.naturalWidth || image.width, image.naturalHeight || image.height);
+  const file = await renderCrop(image, crop, CROP_MAX_EDGE, 0.75);
+  if (file && file.size > 0) return file;
+  console.error("crop export produced no blob", crop);
+  throw new Error("圖片輸出失敗");
 }
 
 const AI_PREVIEW_EDGE = 800;
@@ -216,25 +289,9 @@ async function blobToBase64(blob: Blob) {
 export async function cropToAiJpegBase64(imageSrc: string, area: Area): Promise<string | null> {
   try {
     const image = await loadImage(imageSrc);
-    const sourceWidth = Math.max(1, Math.round(area.width));
-    const sourceHeight = Math.max(1, Math.round(area.height));
-    const scale = Math.min(1, AI_PREVIEW_EDGE / Math.max(sourceWidth, sourceHeight));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
-    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
-    const context = canvas.getContext("2d");
-    if (!context) return null;
-    context.drawImage(
-      image,
-      Math.round(area.x),
-      Math.round(area.y),
-      sourceWidth,
-      sourceHeight,
-      0,
-      0,
-      canvas.width,
-      canvas.height,
-    );
+    const crop = safeCrop(area, image.naturalWidth || image.width, image.naturalHeight || image.height);
+    const canvas = drawCrop(image, crop, AI_PREVIEW_EDGE);
+    if (!canvas) return null;
     const blob = await new Promise<Blob | null>((resolve) => {
       canvas.toBlob((result) => resolve(result), "image/jpeg", 0.7);
     });

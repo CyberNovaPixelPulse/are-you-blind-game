@@ -94,7 +94,7 @@ export function pickQuestions(
   reservedIds: string[],
   count: number,
 ): BatchDrawResult {
-  const limit = Math.min(5, Math.max(1, Math.floor(count)));
+  const limit = Math.min(10, Math.max(1, Math.floor(count)));
   const playableRows = playable(rows);
   const seen = new Set(seenIds.filter(isQuestionId));
   const reserved = new Set(reservedIds.filter(isQuestionId));

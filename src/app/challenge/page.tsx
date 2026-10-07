@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -10,14 +9,17 @@ import { SiteFooter } from "@/components/site-footer";
 import type { User } from "@supabase/supabase-js";
 import { HonorCard } from "@/components/honor-card";
 import { useLanguage } from "@/components/language-provider";
-import { commitDraw, drawQuestion, recordAnsweredQuestion } from "@/lib/draw-question";
+import { drawQuestions, recordAnsweredQuestion, type DrawnQuestion } from "@/lib/draw-question";
 import { recordQuestionView } from "@/lib/question-views";
 import { getMyRank } from "@/lib/leaderboard";
 import { readStoredOptions, type QuizOption } from "@/lib/question-options";
 import { quizImageUrl } from "@/lib/quiz-image";
+import { rememberSeen, writeSeenIds } from "@/lib/seen-questions";
 import { supabase } from "@/lib/supabase";
 
 const ROUND_MS = 10_000;
+const INITIAL_POOL = 10;
+const REFILL_BELOW = 3;
 const PENDING_KEY = "challenge-pending-score";
 const CHALLENGE_GAMES_KEY = "challengeGamesPlayed";
 const CHALLENGE_AD_EVERY = 3;
@@ -28,13 +30,14 @@ function readChallengeGames() {
   return value;
 }
 
-type Question = {
-  id: string;
-  crop_image_path: string;
-  original_image_path: string;
-  author_name: string;
-  options: unknown;
+type Question = DrawnQuestion;
+
+type QueuedQuestion = {
+  question: Question;
+  options: QuizOption[];
 };
+
+type PoolOutcome = "ok" | "empty" | "error" | "stale";
 
 type EndReason = "wrong" | "timeout" | "clear";
 type SaveState = "idle" | "guest" | "saved" | "error";
@@ -58,6 +61,25 @@ function shuffle<T>(items: T[]): T[] {
 
 function publicImageUrl(path: string) {
   return quizImageUrl(path);
+}
+
+function refillBatchSize() {
+  return 5 + Math.floor(Math.random() * 4);
+}
+
+function preloadImage(src: string, cache: Set<string>) {
+  if (!src || cache.has(src)) return;
+  cache.add(src);
+  const image = new window.Image();
+  image.decoding = "async";
+  image.src = src;
+}
+
+function imageReady(src: string) {
+  if (!src) return false;
+  const image = new window.Image();
+  image.src = src;
+  return image.complete && image.naturalWidth > 0;
 }
 
 function scoreForRemaining(remainingMs: number) {
@@ -119,19 +141,42 @@ export default function ChallengePage() {
   const [challengeGamesPlayed, setChallengeGamesPlayed] = useState(0);
   const [adOpen, setAdOpen] = useState(false);
   const [shame, setShame] = useState<ShameCard | null>(null);
+  const [timedId, setTimedId] = useState<string | null>(null);
   const pendingLeave = useRef<"restart" | "home" | null>(null);
   const roundShot = useRef<{ cropUrl: string; answerText: string } | null>(null);
+  const questionsQueue = useRef<QueuedQuestion[]>([]);
+  const currentIndexRef = useRef(-1);
+  const imageCacheRef = useRef(new Set<string>());
+  const poolGenRef = useRef(0);
+  const fillingRef = useRef<Promise<void> | null>(null);
+  const fillingGenRef = useRef(0);
+  const poolResultRef = useRef<PoolOutcome>("ok");
+  const refillIdleRef = useRef(false);
+  const clockArmedRef = useRef<string | null>(null);
 
   const phaseRef = useRef(phase);
   const endedRef = useRef(false);
   const lockRef = useRef(false);
   const scoreRef = useRef(0);
   const streakRef = useRef(0);
-  const roundRef = useRef(0);
   const deadlineRef = useRef(0);
   const questionRef = useRef<Question | null>(null);
   phaseRef.current = phase;
   questionRef.current = question;
+
+  useEffect(() => {
+    if (phaseRef.current !== "idle") return;
+    const gen = ++poolGenRef.current;
+    questionsQueue.current = [];
+    currentIndexRef.current = -1;
+    refillIdleRef.current = false;
+    imageCacheRef.current = new Set();
+    void refill(INITIAL_POOL);
+    return () => {
+      if (phaseRef.current !== "idle") return;
+      if (poolGenRef.current === gen) poolGenRef.current += 1;
+    };
+  }, [language]);
 
   async function recordScore(totalScore: number, streakCount: number, currentUser: User) {
     const identity = await playerIdentity(currentUser);
@@ -183,12 +228,14 @@ export default function ChallengePage() {
   }, []);
 
   useEffect(() => {
-    if (phase !== "play" || !question) return;
-    deadlineRef.current = performance.now() + ROUND_MS;
-    setRemainingMs(ROUND_MS);
+    if (phase !== "play" || !question || timedId !== question.id) return;
+    if (deadlineRef.current <= performance.now()) {
+      deadlineRef.current = performance.now() + ROUND_MS;
+    }
+    setRemainingMs(Math.max(0, deadlineRef.current - performance.now()));
     let frame = 0;
     const tick = (now: number) => {
-      if (endedRef.current || phaseRef.current !== "play") return;
+      if (endedRef.current || phaseRef.current !== "play" || questionRef.current?.id !== question.id) return;
       const left = Math.max(0, deadlineRef.current - now);
       setRemainingMs(left);
       if (left <= 0) {
@@ -199,7 +246,7 @@ export default function ChallengePage() {
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [phase, question]);
+  }, [phase, question, timedId]);
 
   function finish(reason: EndReason, miss?: { text: string; taunt: string }) {
     if (endedRef.current) return;
@@ -238,42 +285,150 @@ export default function ChallengePage() {
     });
   }
 
-  async function loadNext() {
-    const round = roundRef.current + 1;
-    roundRef.current = round;
-    lockRef.current = true;
-    setStatus("loading");
-    setQuestion(null);
-    setOptions([]);
-    const drawn = await drawQuestion(questionRef.current?.id, languageRef.current);
-    if (round !== roundRef.current || endedRef.current) return;
-    if (drawn.error) {
-      setStatus("error");
-      return;
+  function preloadAround(index: number) {
+    for (const offset of [1, 2]) {
+      const upcoming = questionsQueue.current[index + offset]?.question;
+      if (!upcoming) continue;
+      preloadImage(publicImageUrl(upcoming.crop_image_path), imageCacheRef.current);
+      preloadImage(publicImageUrl(upcoming.original_image_path), imageCacheRef.current);
     }
-    if (!drawn.question) {
-      if (scoreRef.current > 0 || streakRef.current > 0) {
-        finish("clear");
-        return;
-      }
-      setStatus("empty");
-      setPhase("idle");
-      phaseRef.current = "idle";
-      return;
+  }
+
+  function preloadOpeningCrops() {
+    for (const item of questionsQueue.current.slice(0, 3)) {
+      preloadImage(publicImageUrl(item.question.crop_image_path), imageCacheRef.current);
     }
-    commitDraw(drawn);
-    recordQuestionView(drawn.question.id);
+  }
+
+  function armClock(id: string) {
+    if (endedRef.current || phaseRef.current !== "play") return;
+    if (questionRef.current?.id !== id || clockArmedRef.current === id) return;
+    clockArmedRef.current = id;
     deadlineRef.current = performance.now() + ROUND_MS;
-    const nextOptions = shuffle(readStoredOptions(drawn.question.options));
-    const correct = nextOptions.find((option) => option.isCorrect);
+    setRemainingMs(ROUND_MS);
+    setTimedId(id);
+  }
+
+  function present(index: number) {
+    const item = questionsQueue.current[index];
+    if (!item) return false;
+    currentIndexRef.current = index;
+    lockRef.current = false;
+    clockArmedRef.current = null;
+    deadlineRef.current = 0;
+    setTimedId(null);
+    setRemainingMs(ROUND_MS);
+    const correct = item.options.find((option) => option.isCorrect);
     roundShot.current = {
-      cropUrl: publicImageUrl(drawn.question.crop_image_path),
+      cropUrl: publicImageUrl(item.question.crop_image_path),
       answerText: correct?.text ?? "",
     };
-    setOptions(nextOptions);
-    setQuestion(drawn.question);
+    rememberSeen(item.question.id);
+    recordQuestionView(item.question.id);
+    questionRef.current = item.question;
+    setQuestion(item.question);
+    setOptions(item.options);
     setStatus("ready");
-    lockRef.current = false;
+    preloadAround(index);
+    const cropUrl = publicImageUrl(item.question.crop_image_path);
+    if (imageReady(cropUrl)) armClock(item.question.id);
+    if (questionsQueue.current.length - index - 1 < REFILL_BELOW) void refill(refillBatchSize());
+    return true;
+  }
+
+  async function refill(count: number) {
+    const gen = poolGenRef.current;
+    if (refillIdleRef.current && fillingGenRef.current === gen) return "empty" as const;
+    if (fillingRef.current) {
+      const flightGen = fillingGenRef.current;
+      await fillingRef.current;
+      if (poolGenRef.current !== gen) return "stale" as const;
+      if (flightGen === gen) return poolResultRef.current;
+    }
+    if (poolGenRef.current !== gen || (refillIdleRef.current && fillingGenRef.current === gen)) {
+      return poolGenRef.current === gen ? "empty" : "stale";
+    }
+    const task = (async () => {
+      const requested = languageRef.current;
+      const reservedIds = questionsQueue.current.map((item) => item.question.id);
+      const drawn = await drawQuestions(count, questionRef.current?.id, reservedIds, requested);
+      if (poolGenRef.current !== gen || languageRef.current !== requested) {
+        poolResultRef.current = "stale";
+        return;
+      }
+      if (drawn.error) {
+        poolResultRef.current = "error";
+        return;
+      }
+      const queuedIds = questionsQueue.current.map((item) => item.question.id);
+      if (drawn.resetSeen) {
+        writeSeenIds([
+          ...drawn.keepIds,
+          ...queuedIds,
+          ...drawn.questions.map((item) => item.id),
+          ...(questionRef.current ? [questionRef.current.id] : []),
+        ]);
+      }
+      const existing = new Set(queuedIds);
+      const fresh = drawn.questions.filter((item) => !existing.has(item.id));
+      if (fresh.length === 0) {
+        refillIdleRef.current = true;
+        poolResultRef.current = "empty";
+        return;
+      }
+      const wasEmpty = questionsQueue.current.length === 0;
+      questionsQueue.current = [
+        ...questionsQueue.current,
+        ...fresh.map((item) => ({
+          question: item,
+          options: shuffle(readStoredOptions(item.options)),
+        })),
+      ];
+      poolResultRef.current = "ok";
+      if (wasEmpty || currentIndexRef.current < 0) preloadOpeningCrops();
+      else preloadAround(currentIndexRef.current);
+    })();
+    fillingGenRef.current = gen;
+    fillingRef.current = task;
+    try {
+      await task;
+    } finally {
+      if (fillingRef.current === task) fillingRef.current = null;
+    }
+    return poolResultRef.current;
+  }
+
+  function showNoQuestion(outcome: PoolOutcome) {
+    if (scoreRef.current > 0 || streakRef.current > 0) {
+      finish("clear");
+      return;
+    }
+    setQuestion(null);
+    setOptions([]);
+    setTimedId(null);
+    setStatus(outcome === "error" ? "error" : "empty");
+    if (outcome !== "error") {
+      phaseRef.current = "idle";
+      setPhase("idle");
+    }
+  }
+
+  async function beginRound() {
+    const gen = poolGenRef.current;
+    const upcoming = questionsQueue.current.slice(currentIndexRef.current + 1);
+    questionsQueue.current = upcoming;
+    currentIndexRef.current = -1;
+    if (questionsQueue.current.length === 0) {
+      setStatus("loading");
+      const outcome = await refill(INITIAL_POOL);
+      if (endedRef.current || phaseRef.current !== "play" || poolGenRef.current !== gen) return;
+      if (!questionsQueue.current.length) {
+        showNoQuestion(outcome);
+        return;
+      }
+    }
+    preloadOpeningCrops();
+    present(0);
   }
 
   function start() {
@@ -282,23 +437,58 @@ export default function ChallengePage() {
     lockRef.current = false;
     scoreRef.current = 0;
     streakRef.current = 0;
-    roundRef.current += 1;
+    clockArmedRef.current = null;
+    deadlineRef.current = 0;
+    refillIdleRef.current = false;
     setScore(0);
     setStreak(0);
     setRemainingMs(ROUND_MS);
     setRank(null);
     setSaveState("idle");
     setNotice("");
-    setQuestion(null);
-    setOptions([]);
+    setTimedId(null);
     setShame(null);
     phaseRef.current = "play";
     setPhase("play");
-    void loadNext();
+    setStatus(questionsQueue.current.length > currentIndexRef.current + 1 ? "ready" : "loading");
+    void beginRound();
+  }
+
+  async function advance() {
+    const nextIndex = currentIndexRef.current + 1;
+    if (questionsQueue.current[nextIndex]) {
+      present(nextIndex);
+      return;
+    }
+    lockRef.current = true;
+    clockArmedRef.current = null;
+    deadlineRef.current = 0;
+    setTimedId(null);
+    const outcome = await refill(refillBatchSize());
+    if (endedRef.current || phaseRef.current !== "play") return;
+    if (questionsQueue.current[nextIndex]) {
+      present(nextIndex);
+      return;
+    }
+    showNoQuestion(outcome);
+  }
+
+  async function retryLoad() {
+    refillIdleRef.current = false;
+    setStatus("loading");
+    const outcome = await refill(questionsQueue.current.length === 0 ? INITIAL_POOL : refillBatchSize());
+    if (endedRef.current || phaseRef.current !== "play") return;
+    const index = currentIndexRef.current < 0 ? 0 : currentIndexRef.current;
+    if (questionsQueue.current[index]) {
+      present(index);
+      return;
+    }
+    showNoQuestion(outcome);
   }
 
   function onGuess(option: QuizOption) {
     if (phaseRef.current !== "play" || lockRef.current || endedRef.current || !questionRef.current) return;
+    if (clockArmedRef.current !== questionRef.current.id) return;
     const remaining = Math.max(0, deadlineRef.current - performance.now());
     if (remaining <= 0) {
       finish("timeout");
@@ -318,7 +508,7 @@ export default function ChallengePage() {
     streakRef.current = nextStreak;
     setScore(nextScore);
     setStreak(nextStreak);
-    void loadNext();
+    void advance();
   }
 
   function runLeave(action: "restart" | "home") {
@@ -384,9 +574,10 @@ export default function ChallengePage() {
     });
   }
 
-  const urgent = phase === "play" && question !== null && remainingMs <= 3000;
-  const seconds = question ? Math.max(0, Math.ceil(remainingMs / 1000)) : 10;
-  const barWidth = phase === "play" && question ? (remainingMs / ROUND_MS) * 100 : phase === "play" ? 100 : 0;
+  const clockRunning = phase === "play" && question !== null && timedId === question.id;
+  const urgent = clockRunning && remainingMs <= 3000;
+  const seconds = clockRunning ? Math.max(0, Math.ceil(remainingMs / 1000)) : 10;
+  const barWidth = clockRunning ? (remainingMs / ROUND_MS) * 100 : phase === "play" ? 100 : 0;
   const showBoard = phase !== "play";
 
   return (
@@ -441,6 +632,9 @@ export default function ChallengePage() {
           <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-lg shadow-black/5 dark:border-white/15 dark:bg-zinc-950">
             <p className="text-sm font-semibold tracking-[0.18em] text-amber-600 uppercase">{t.challengeMode.badge}</p>
             <h1 className="mt-2 text-3xl font-black">⚡ {t.challengeMode.title}</h1>
+            {status === "empty" ? (
+              <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">還沒有可以挑戰的題目。</p>
+            ) : null}
             <ul className="mt-4 flex flex-col gap-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
               <li>{t.challengeMode.rule1}</li>
               <li>{t.challengeMode.rule2}</li>
@@ -460,7 +654,9 @@ export default function ChallengePage() {
       {phase === "play" ? (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
           <section className="flex w-full flex-col items-center">
-            {status === "loading" ? <p className="py-16 text-center text-sm text-zinc-500">{t("drawing")}</p> : null}
+            {status === "loading" && !question ? (
+              <p className="py-16 text-center text-sm text-zinc-500">{t("drawing")}</p>
+            ) : null}
             {status === "empty" ? (
               <p className="py-10 text-sm text-zinc-600 dark:text-zinc-400">還沒有可以挑戰的題目。</p>
             ) : null}
@@ -475,13 +671,12 @@ export default function ChallengePage() {
                   urgent ? "animate-challenge-alarm ring-4 ring-red-500" : ""
                 }`}
               >
-                <Image
+                <img
                   src={publicImageUrl(question.crop_image_path)}
                   alt="這題的特寫"
-                  fill
-                  priority
-                  sizes="320px"
-                  className="h-full w-full object-cover"
+                  className="absolute inset-0 h-full w-full object-cover"
+                  onLoad={() => armClock(question.id)}
+                  onError={() => armClock(question.id)}
                 />
               </div>
             ) : null}
@@ -493,7 +688,8 @@ export default function ChallengePage() {
                     key={option.id}
                     type="button"
                     onClick={() => onGuess(option)}
-                    className="rounded-2xl border border-black/10 bg-white px-4 py-3 text-left text-base font-medium dark:border-white/15 dark:bg-zinc-950"
+                    disabled={!clockRunning}
+                    className="rounded-2xl border border-black/10 bg-white px-4 py-3 text-left text-base font-medium disabled:opacity-60 dark:border-white/15 dark:bg-zinc-950"
                   >
                     {option.text}
                   </button>
@@ -502,7 +698,7 @@ export default function ChallengePage() {
             {status === "error" ? (
               <button
                 type="button"
-                onClick={() => void loadNext()}
+                onClick={() => void retryLoad()}
                 className="h-14 rounded-full bg-zinc-950 text-base font-semibold text-white dark:bg-zinc-50 dark:text-zinc-950"
               >
                 再試一次
