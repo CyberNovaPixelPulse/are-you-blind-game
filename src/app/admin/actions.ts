@@ -12,6 +12,7 @@ import {
   requireAdmin,
 } from "@/lib/admin-access";
 import { isDifficulty, type Difficulty } from "@/lib/question-options";
+import { quizImageObjectPath } from "@/lib/quiz-image";
 import { adminDb, hasServiceRole } from "@/lib/supabase-admin";
 
 type ActionResult = { ok: true } | { ok: false; message: string };
@@ -179,7 +180,7 @@ export async function deleteQuestion(
   await db.from("question_reports").delete().eq("question_id", id);
   const { data, error } = await db.from("questions").delete().eq("id", id).select("id");
   if (error || !data?.length) return { ok: false, message: "題目刪除失敗" };
-  const paths = imagePaths.filter((path) => path && !path.includes(".."));
+  const paths = imagePaths.map(quizImageObjectPath).filter((path) => path && !path.includes(".."));
   if (paths.length > 0) {
     await db.storage.from("quiz-images").remove(paths);
   }
@@ -260,6 +261,7 @@ export async function deleteQuestions(
   if (error || (data?.length ?? 0) !== clean.length) return { ok: false, message: "批次刪除失敗" };
   const paths = items
     .flatMap((item) => item.imagePaths)
+    .map(quizImageObjectPath)
     .filter((path) => path && !path.includes(".."));
   if (paths.length > 0) await db.storage.from("quiz-images").remove(paths);
   refreshAdmin();

@@ -16,6 +16,7 @@ import {
 import type { AdminQuestion } from "@/app/admin/types";
 import { isLanguageCode, languageByCode, SUPPORTED_LANGUAGES, type LanguageCode } from "@/lib/languages";
 import { DIFFICULTIES, isDifficulty, type Difficulty } from "@/lib/question-options";
+import { quizImageObjectPath } from "@/lib/quiz-image";
 import { supabase } from "@/lib/supabase";
 
 type WriteResult = { ok: true } | { ok: false; message: string };
@@ -670,7 +671,9 @@ export function AdminBoard({
     if (error || !data?.length) return { ok: false, message: "沒有這題的刪除權限。" };
     await supabase.storage
       .from("quiz-images")
-      .remove([question.cropPath, question.originalPath].filter(Boolean));
+      .remove(
+        [question.cropPath, question.originalPath].filter(Boolean).map(quizImageObjectPath),
+      );
     return { ok: true };
   }
 

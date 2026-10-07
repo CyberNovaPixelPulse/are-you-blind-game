@@ -59,7 +59,7 @@ safety_violated 只有在色情、血腥暴力，或身分證、護照、信用�
 
 const MAX_IMAGE_BYTES = 150 * 1024;
 const STORAGE_PATH =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(?:crop|original)\.webp$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(?:crop|original)\.(?:webp|jpe?g|png)$/i;
 
 function clip(value: string, max: number) {
   return value.trim().slice(0, max);

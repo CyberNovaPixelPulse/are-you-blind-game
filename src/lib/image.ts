@@ -129,6 +129,23 @@ function fileFromBlob(blob: Blob, filename: string, type: string) {
   return new File([blob], filename, { type, lastModified: Date.now() });
 }
 
+export function imageFileMeta(file: Blob, role: "crop" | "original") {
+  const raw = file.type.toLowerCase();
+  const contentType =
+    raw === "image/jpg" || raw === "image/jpeg"
+      ? "image/jpeg"
+      : raw === "image/png"
+        ? "image/png"
+        : "image/webp";
+  const ext = contentType === "image/jpeg" ? "jpg" : contentType === "image/png" ? "png" : "webp";
+  return { contentType, ext, filename: `${role}.${ext}` };
+}
+
+function storedImage(blob: Blob, role: "crop" | "original") {
+  const meta = imageFileMeta(blob, role);
+  return fileFromBlob(blob, meta.filename, meta.contentType);
+}
+
 async function jpegFileToWebp(file: File, edge: number, quality: number) {
   const options = {
     maxSizeMB: MAX_IMAGE_BYTES / (1024 * 1024),
@@ -145,7 +162,7 @@ async function jpegFileToWebp(file: File, edge: number, quality: number) {
     } catch {
       compressed = await imageCompression(file, { ...options, useWebWorker: false });
     }
-    const webp = fileFromBlob(compressed, "crop.webp", "image/webp");
+    const webp = storedImage(compressed, "crop");
     if (webp.size > 0 && (await isWebpFile(webp))) return webp;
   } catch (error) {
     console.error("jpeg to webp failed", { edge, quality, bytes: file.size, error });
@@ -156,12 +173,12 @@ async function jpegFileToWebp(file: File, edge: number, quality: number) {
 async function exportOriginalCanvas(canvas: HTMLCanvasElement, quality: number): Promise<File | null> {
   const webpBlob = await canvasToBlob(canvas, "image/webp", quality);
   if (webpBlob && webpBlob.size > 0 && (await isWebpFile(webpBlob))) {
-    return fileFromBlob(webpBlob, "original.webp", "image/webp");
+    return storedImage(webpBlob, "original");
   }
 
   const jpegBlob = await canvasToBlob(canvas, "image/jpeg", quality);
   if (jpegBlob && jpegBlob.size > 0) {
-    return fileFromBlob(jpegBlob, "original.jpg", "image/jpeg");
+    return storedImage(jpegBlob, "original");
   }
 
   console.error("original export produced no blob", {
@@ -177,7 +194,7 @@ async function exportOriginalCanvas(canvas: HTMLCanvasElement, quality: number):
 async function exportCanvas(canvas: HTMLCanvasElement, quality: number): Promise<File | null> {
   const webpBlob = await canvasToBlob(canvas, "image/webp", quality);
   if (webpBlob && webpBlob.size > 0 && (await isWebpFile(webpBlob))) {
-    return fileFromBlob(webpBlob, "crop.webp", "image/webp");
+    return storedImage(webpBlob, "crop");
   }
 
   const jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.75);
@@ -192,7 +209,7 @@ async function exportCanvas(canvas: HTMLCanvasElement, quality: number): Promise
     return null;
   }
 
-  const jpegFile = fileFromBlob(jpegBlob, "crop.jpg", "image/jpeg");
+  const jpegFile = storedImage(jpegBlob, "crop");
   const converted = await jpegFileToWebp(jpegFile, Math.max(canvas.width, canvas.height), quality);
   return converted ?? jpegFile;
 }
@@ -228,19 +245,20 @@ async function renderCrop(
   return exportCanvas(canvas, quality);
 }
 
-function namedOriginal(file: File, filename: string) {
-  const type = file.type === "image/jpeg" ? "image/jpeg" : "image/webp";
-  const name = type === "image/jpeg" ? "original.jpg" : filename;
-  return fileFromBlob(file, name, type);
+function namedOriginal(file: File) {
+  return storedImage(file, "original");
 }
 
-export async function compressOriginalImage(file: File, filename = "original.webp"): Promise<File> {
+export async function compressOriginalImage(file: File): Promise<File> {
   if (
     file.size > 0 &&
     file.size <= ORIGINAL_MAX_BYTES &&
-    (file.type === "image/webp" || file.type === "image/jpeg")
+    (file.type === "image/webp" ||
+      file.type === "image/jpeg" ||
+      file.type === "image/jpg" ||
+      file.type === "image/png")
   ) {
-    return namedOriginal(file, filename);
+    return namedOriginal(file);
   }
 
   const image = await loadFile(file);
@@ -259,18 +277,18 @@ export async function compressOriginalImage(file: File, filename = "original.web
     if (!encoded || encoded.size < 1) continue;
     produced.push(encoded);
     if (encoded.size <= ORIGINAL_TARGET_BYTES) {
-      return namedOriginal(encoded, filename);
+      return namedOriginal(encoded);
     }
     if (encoded.size <= ORIGINAL_MAX_BYTES && !withinCeiling) withinCeiling = encoded;
   }
 
-  if (withinCeiling) return namedOriginal(withinCeiling, filename);
+  if (withinCeiling) return namedOriginal(withinCeiling);
 
   const smallest = produced.reduce<File | null>(
     (best, item) => (!best || item.size < best.size ? item : best),
     null,
   );
-  if (smallest) return namedOriginal(smallest, filename);
+  if (smallest) return namedOriginal(smallest);
 
   console.error("original export produced no blob", {
     width: crop.width,
@@ -280,9 +298,9 @@ export async function compressOriginalImage(file: File, filename = "original.web
   throw new Error("圖片輸出失敗");
 }
 
-export async function compressCloseupToWebp(file: File, filename: string): Promise<File> {
+export async function compressCloseupToWebp(file: File): Promise<File> {
   if (file.size > 0 && file.size <= MAX_IMAGE_BYTES) {
-    return fileFromBlob(file, filename, file.type || "image/webp");
+    return storedImage(file, "crop");
   }
 
   const image = await loadFile(file);
@@ -304,14 +322,14 @@ export async function compressCloseupToWebp(file: File, filename: string): Promi
   for (const step of CLOSEUP_STEPS) {
     const ready = take(await renderCrop(image, crop, step.edge, step.quality));
     if (!ready) continue;
-    return fileFromBlob(ready, filename, ready.type || "image/jpeg");
+    return storedImage(ready, "crop");
   }
 
   let edge = 400;
   let quality = 0.4;
   while (edge >= 96) {
     const ready = take(await renderCrop(image, crop, edge, quality));
-    if (ready) return fileFromBlob(ready, filename, ready.type || "image/jpeg");
+    if (ready) return storedImage(ready, "crop");
     edge = Math.round(edge * 0.75);
     quality = Math.max(0.3, quality - 0.05);
   }
@@ -320,13 +338,13 @@ export async function compressCloseupToWebp(file: File, filename: string): Promi
     (best, file) => (!best || file.size < best.size ? file : best),
     null,
   );
-  if (legal) return fileFromBlob(legal, filename, legal.type || "image/jpeg");
+  if (legal) return storedImage(legal, "crop");
 
   const fallback = produced.reduce<File | null>(
     (best, file) => (!best || file.size < best.size ? file : best),
     null,
   );
-  if (fallback) return fileFromBlob(fallback, filename, fallback.type || "image/jpeg");
+  if (fallback) return storedImage(fallback, "crop");
   console.error("close-up export produced no blob", { width: crop.width, height: crop.height, sourceBytes: file.size });
   throw new Error("圖片輸出失敗");
 }

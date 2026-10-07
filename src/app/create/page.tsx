@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Area, Point } from "react-easy-crop";
 import type { User } from "@supabase/supabase-js";
-import { cropToFile, compressCloseupToWebp, compressOriginalImage, cropToAiJpegBase64 } from "@/lib/image";
+import { cropToFile, compressCloseupToWebp, compressOriginalImage, cropToAiJpegBase64, imageFileMeta } from "@/lib/image";
 import type { CreateQuizCopy } from "@/lib/create-copy";
 import { isLanguageCode, LANGUAGES, type LanguageCode } from "@/lib/languages";
 import { fillTemplate } from "@/lib/ui-sections";
@@ -91,6 +91,29 @@ async function postAiOptions(correctAnswer: string, language: string, imageBase6
   });
   const payload = (await response.json().catch(() => null)) as AiOptionsPayload | null;
   return { ok: response.ok, payload };
+}
+
+async function uploadQuizImage(
+  accessToken: string,
+  questionId: string,
+  role: "crop" | "original",
+  file: File,
+) {
+  const meta = imageFileMeta(file, role);
+  const body = new FormData();
+  body.set("questionId", questionId);
+  body.set("role", role);
+  body.set("file", file, meta.filename);
+  const response = await fetch("/api/quiz-images", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body,
+  });
+  const payload = (await response.json()) as { message?: string; objectPath?: string; publicUrl?: string };
+  if (!response.ok || !payload.objectPath || !payload.publicUrl) {
+    throw new Error(payload.message || "圖片上傳失敗");
+  }
+  return { objectPath: payload.objectPath, publicUrl: payload.publicUrl };
 }
 
 async function fileToBase64(file: File) {
@@ -187,9 +210,6 @@ function readableError(error: unknown, copy: CreateQuizCopy): string {
     normalized.includes("payload too large")
   ) {
     return copy.tooLarge;
-  }
-  if (normalized.includes("mime")) {
-    return copy.webpOnly;
   }
   return message;
 }
@@ -472,12 +492,8 @@ export default function CreatePage() {
       setPhase("compressing");
 
       const cropped = await cropToFile(imageUrl, croppedAreaPixels);
-      const cropFile = await compressCloseupToWebp(
-        cropped,
-        cropped.type === "image/jpeg" ? "crop.jpg" : "crop.webp",
-      );
-      const cropType = cropFile.type === "image/jpeg" ? "image/jpeg" : "image/webp";
-      const cropExt = cropType === "image/jpeg" ? "jpg" : "webp";
+      const cropFile = await compressCloseupToWebp(cropped);
+      const cropMeta = imageFileMeta(cropFile, "crop");
 
       setPhase("moderating");
       const correctAnswer = options[correctIndex]?.optionText.trim() ?? "";
@@ -493,7 +509,7 @@ export default function CreatePage() {
               taunt: option.tauntText.trim(),
             })),
           imageBase64: await fileToBase64(cropFile),
-          mimeType: cropType,
+          mimeType: cropMeta.contentType,
         }),
       });
       const moderation = (await moderationResponse.json()) as {
@@ -513,38 +529,24 @@ export default function CreatePage() {
         return;
       }
 
-      const originalFile = await compressOriginalImage(sourceFile, "original.webp");
-      const originalType = originalFile.type === "image/jpeg" ? "image/jpeg" : "image/webp";
-      const originalExt = originalType === "image/jpeg" ? "jpg" : "webp";
+      const originalFile = await compressOriginalImage(sourceFile);
 
       questionId = crypto.randomUUID();
-      const cropPath = `${currentUser.id}/${questionId}/crop.${cropExt}`;
-      const originalPath = `${currentUser.id}/${questionId}/original.${originalExt}`;
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      if (!accessToken) throw new Error(copy.needLogin);
 
       setPhase("uploading");
-      const cropUpload = await supabase.storage
-        .from("quiz-images")
-        .upload(cropPath, cropFile, {
-          contentType: cropType,
-          upsert: false,
-        });
-      if (cropUpload.error) throw new Error(cropUpload.error.message);
-      uploaded.push(cropPath);
-
-      const originalUpload = await supabase.storage
-        .from("quiz-images")
-        .upload(originalPath, originalFile, {
-          contentType: originalType,
-          upsert: false,
-        });
-      if (originalUpload.error) throw new Error(originalUpload.error.message);
-      uploaded.push(originalPath);
+      const cropUpload = await uploadQuizImage(accessToken, questionId, "crop", cropFile);
+      uploaded.push(cropUpload.objectPath);
+      const originalUpload = await uploadQuizImage(accessToken, questionId, "original", originalFile);
+      uploaded.push(originalUpload.objectPath);
 
       setPhase("saving");
       const questionInsert = await supabase.from("questions").insert({
         id: questionId,
-        crop_image_path: cropPath,
-        original_image_path: originalPath,
+        crop_image_path: cropUpload.publicUrl,
+        original_image_path: originalUpload.publicUrl,
         author_id: currentUser.id,
         author_name: authorName.trim(),
         difficulty: "normal",
