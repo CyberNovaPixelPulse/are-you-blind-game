@@ -390,8 +390,14 @@ export default function ChallengePage() {
   const showBoard = phase !== "play";
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-md flex-col p-4 font-sans text-zinc-950 md:max-w-4xl md:py-10 dark:text-zinc-50">
-      <header className="mb-4 flex items-center justify-between gap-3">
+    <div
+      className={`mx-auto flex w-full max-w-md flex-col font-sans text-zinc-950 md:max-w-4xl dark:text-zinc-50 ${
+        phase === "play"
+          ? "h-[100dvh] justify-between overflow-hidden p-3 md:h-auto md:min-h-screen md:overflow-visible md:p-4 md:py-10"
+          : "min-h-screen p-4 md:py-10"
+      }`}
+    >
+      <header className={`flex shrink-0 items-center justify-between gap-3 ${phase === "play" ? "mb-2" : "mb-4"}`}>
         <Link
           href="/"
           className="inline-flex h-9 items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 dark:border-white/15 dark:text-zinc-300"
@@ -409,7 +415,9 @@ export default function ChallengePage() {
       </header>
 
       <div
-        className={`mb-4 h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800 ${
+        className={`h-1.5 shrink-0 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800 ${
+          phase === "play" ? "mb-2" : "mb-4"
+        } ${
           urgent ? "animate-challenge-alarm" : ""
         }`}
         role="progressbar"
@@ -450,7 +458,7 @@ export default function ChallengePage() {
       ) : null}
 
       {phase === "play" ? (
-        <div className="flex flex-1 flex-col justify-between gap-6 md:flex-row md:items-center">
+        <div className="flex min-h-0 flex-1 flex-col justify-between gap-2 md:flex-row md:items-center">
           <section className="w-full md:flex-1">
             {status === "loading" ? <p className="py-16 text-center text-sm text-zinc-500">{t("drawing")}</p> : null}
             {status === "empty" ? (
@@ -463,7 +471,7 @@ export default function ChallengePage() {
             ) : null}
             {status === "ready" && question ? (
               <div
-                className={`relative aspect-square overflow-hidden rounded-3xl border-4 bg-zinc-900 shadow-xl ${
+                className={`relative h-[min(30vh,220px)] overflow-hidden rounded-3xl border-4 bg-zinc-900 shadow-xl md:aspect-square md:h-auto md:max-h-none ${
                   urgent ? "animate-challenge-alarm border-red-500" : "border-transparent"
                 }`}
               >
@@ -478,14 +486,14 @@ export default function ChallengePage() {
               </div>
             ) : null}
           </section>
-          <section className="flex w-full flex-col gap-3 md:flex-1">
+          <section className="flex w-full shrink-0 flex-col gap-2 md:flex-1">
             {status === "ready"
               ? options.map((option) => (
                   <button
                     key={option.id}
                     type="button"
                     onClick={() => onGuess(option)}
-                    className="h-16 rounded-2xl border border-black/10 bg-white px-4 text-left text-lg font-medium dark:border-white/15 dark:bg-zinc-950"
+                    className="rounded-2xl border border-black/10 bg-white px-4 py-3 text-left text-base font-medium dark:border-white/15 dark:bg-zinc-950"
                   >
                     {option.text}
                   </button>
@@ -510,7 +518,7 @@ export default function ChallengePage() {
         </div>
       ) : null}
 
-      <SiteFooter className="mt-8" />
+      {phase === "play" ? null : <SiteFooter className="mt-8" />}
 
       <AdModal open={adOpen} onComplete={finishChallengeAd} />
 

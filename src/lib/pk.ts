@@ -5,6 +5,7 @@ import { MIN_LANGUAGE_POOL } from "@/lib/question-draw";
 import { supabase } from "@/lib/supabase";
 
 export const PK_LANGUAGE = "zh-TW";
+export const RANDOM_MATCH_WAIT_MS = 15_000;
 const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export type PkMode = "random" | "private";

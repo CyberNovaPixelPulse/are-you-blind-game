@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Area, Point } from "react-easy-crop";
 import type { User } from "@supabase/supabase-js";
-import { cropToFile, compressToWebp } from "@/lib/image";
+import { cropToFile, compressToWebp, cropToAiJpegBase64 } from "@/lib/image";
 import type { CreateQuizCopy } from "@/lib/create-copy";
 import { isLanguageCode, LANGUAGES, type LanguageCode } from "@/lib/languages";
 import { fillTemplate } from "@/lib/ui-sections";
@@ -57,6 +57,40 @@ function emptyOptions(): OptionDraft[] {
     optionText: "",
     tauntText: "",
   }));
+}
+
+type AiOptionsPayload = {
+  message?: string;
+  correctTaunt?: string;
+  options?: { text?: string; taunt?: string }[];
+};
+
+function aiOptionsReady(
+  payload: AiOptionsPayload | null,
+  ok: boolean,
+): payload is AiOptionsPayload & { correctTaunt: string; options: { text?: string; taunt?: string }[] } {
+  return Boolean(
+    ok &&
+      payload &&
+      typeof payload.correctTaunt === "string" &&
+      payload.correctTaunt.trim() &&
+      Array.isArray(payload.options) &&
+      payload.options.length === 3,
+  );
+}
+
+async function postAiOptions(correctAnswer: string, language: string, imageBase64: string | null) {
+  const response = await fetch("/api/ai-options", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      correctAnswer,
+      language,
+      ...(imageBase64 ? { imageBase64, mimeType: "image/jpeg" } : {}),
+    }),
+  });
+  const payload = (await response.json().catch(() => null)) as AiOptionsPayload | null;
+  return { ok: response.ok, payload };
 }
 
 async function fileToBase64(file: File) {
@@ -276,32 +310,15 @@ export default function CreatePage() {
     setAiPending(true);
     setAiError("");
     try {
-      const cropped = await cropToFile(imageUrl, croppedAreaPixels);
-      const cropFile = await compressToWebp(cropped, "crop.webp");
-      const imageBase64 = await fileToBase64(cropFile);
-      const response = await fetch("/api/ai-options", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          correctAnswer,
-          imageBase64,
-          mimeType: "image/webp",
-          language: targetLanguage,
-        }),
-      });
-      const payload = (await response.json()) as {
-        message?: string;
-        correctTaunt?: string;
-        options?: { text?: string; taunt?: string }[];
-      };
-      if (
-        !response.ok ||
-        typeof payload.correctTaunt !== "string" ||
-        !payload.correctTaunt.trim() ||
-        !Array.isArray(payload.options) ||
-        payload.options.length !== 3
-      ) {
-        setAiError(payload.message || copy.aiFailed);
+      const imageBase64 = await cropToAiJpegBase64(imageUrl, croppedAreaPixels);
+      const posted = await postAiOptions(correctAnswer, targetLanguage, imageBase64);
+      const recovered =
+        imageBase64 && !aiOptionsReady(posted.payload, posted.ok)
+          ? await postAiOptions(correctAnswer, targetLanguage, null)
+          : posted;
+      const payload = recovered.payload;
+      if (!aiOptionsReady(payload, recovered.ok)) {
+        setAiError(payload?.message || copy.aiFailed);
         return;
       }
       const generated = payload.options;

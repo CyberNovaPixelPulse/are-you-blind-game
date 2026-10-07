@@ -89,3 +89,47 @@ export async function cropToFile(imageSrc: string, area: Area): Promise<File> {
 
   return new File([blob], "crop.png", { type: "image/png" });
 }
+
+const AI_PREVIEW_EDGE = 800;
+
+async function blobToBase64(blob: Blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+
+export async function cropToAiJpegBase64(imageSrc: string, area: Area): Promise<string | null> {
+  try {
+    const image = await loadImage(imageSrc);
+    const sourceWidth = Math.max(1, Math.round(area.width));
+    const sourceHeight = Math.max(1, Math.round(area.height));
+    const scale = Math.min(1, AI_PREVIEW_EDGE / Math.max(sourceWidth, sourceHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.drawImage(
+      image,
+      Math.round(area.x),
+      Math.round(area.y),
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    );
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((result) => resolve(result), "image/jpeg", 0.7);
+    });
+    if (!blob || blob.type !== "image/jpeg" || blob.size < 1) return null;
+    return blobToBase64(blob);
+  } catch {
+    return null;
+  }
+}

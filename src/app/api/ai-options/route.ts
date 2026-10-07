@@ -68,6 +68,74 @@ Write correctTaunt, every option text, and every taunt only in ${info.nativeName
 These limits replace the character limits above: option text at most ${limits.text} characters, each taunt at most ${limits.taunt} characters, correctTaunt at most ${limits.praise} characters.`;
 }
 
+const MAX_AI_IMAGE_BYTES = 400 * 1024;
+
+type AiImage = {
+  mime: "image/jpeg" | "image/png" | "image/webp";
+  base64: string;
+};
+
+function readAiImage(value: unknown): AiImage | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const dataUrl = /^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/i.exec(trimmed);
+  const payload = (dataUrl ? dataUrl[2] : trimmed).replace(/\s/g, "");
+  if (payload.length < 32 || !/^[A-Za-z0-9+/]+={0,2}$/.test(payload)) return null;
+
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(payload, "base64");
+  } catch {
+    return null;
+  }
+  if (bytes.length < 16 || bytes.length > MAX_AI_IMAGE_BYTES) return null;
+
+  const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+  const isWebp =
+    bytes.length >= 12 && bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP";
+  if (isJpeg) return { mime: "image/jpeg", base64: payload };
+  if (isPng) return { mime: "image/png", base64: payload };
+  if (isWebp) return { mime: "image/webp", base64: payload };
+  return null;
+}
+
+function userContent(correctAnswer: string, language: LanguageCode, image: AiImage | null) {
+  const text = `正解名稱：${correctAnswer}\n目標語言：${languageByCode(language).nativeName} (${language})\n請依這個正解產出 3 個同類別、同句型的干擾項，而且 correctTaunt、text、taunt 全部只用這個語言。每句 taunt 都要點出該干擾項和正解的關鍵差異，並嘲諷選了它的玩家。另外給一句正解誇獎。只回傳 JSON。`;
+  if (!image) return text;
+  return [
+    {
+      type: "text" as const,
+      text: `${text}\n附圖是這題的局部裁切。干擾項要維持和正解相同類別與句型，並優先選看起來容易和這張圖搞混的名稱。`,
+    },
+    {
+      type: "image_url" as const,
+      image_url: { url: `data:${image.mime};base64,${image.base64}`, detail: "low" as const },
+    },
+  ];
+}
+
+async function askModel(
+  client: OpenAI,
+  correctAnswer: string,
+  language: LanguageCode,
+  image: AiImage | null,
+) {
+  const completion = await client.chat.completions.create({
+    model: "gpt-4o-mini",
+    response_format: { type: "json_object" },
+    temperature: 0.9,
+    messages: [
+      { role: "system", content: promptFor(language) },
+      { role: "user", content: userContent(correctAnswer, language, image) },
+    ],
+  });
+  const content = completion.choices[0]?.message?.content;
+  if (!content) return null;
+  return readPayload(readModelJson(content), correctAnswer, language);
+}
+
 function readPayload(value: unknown, correctAnswer: string, language: LanguageCode): GeneratedPayload | null {
   if (!value || typeof value !== "object") return null;
   const praise = (value as { correctTaunt?: unknown }).correctTaunt;
@@ -105,12 +173,18 @@ export async function POST(request: Request) {
 
   let correctAnswer = "";
   let language: LanguageCode = "zh-TW";
+  let image: AiImage | null = null;
   try {
-    const body = (await request.json()) as { correctAnswer?: unknown; language?: unknown };
+    const body = (await request.json()) as {
+      correctAnswer?: unknown;
+      language?: unknown;
+      imageBase64?: unknown;
+    };
     correctAnswer = typeof body.correctAnswer === "string" ? body.correctAnswer.trim() : "";
     if (typeof body.language === "string" && isLanguageCode(body.language)) {
       language = body.language;
     }
+    image = readAiImage(body.imageBase64);
   } catch {
     return Response.json({ message: "請提供正解名稱" }, { status: 400 });
   }
@@ -120,25 +194,18 @@ export async function POST(request: Request) {
 
   try {
     const client = new OpenAI({ apiKey });
-    const completion = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      response_format: { type: "json_object" },
-      temperature: 0.9,
-      messages: [
-        { role: "system", content: promptFor(language) },
-        {
-          role: "user",
-          content: `正解名稱：${correctAnswer}\n目標語言：${languageByCode(language).nativeName} (${language})\n請依這個正解產出 3 個同類別、同句型的干擾項，而且 correctTaunt、text、taunt 全部只用這個語言。每句 taunt 都要點出該干擾項和正解的關鍵差異，並嘲諷選了它的玩家。另外給一句正解誇獎。只回傳 JSON。`,
-        },
-      ],
-    });
-    const content = completion.choices[0]?.message?.content;
-    if (!content) {
-      return Response.json({ message: "AI 沒有回傳內容" }, { status: 502 });
+    let generated: GeneratedPayload | null = null;
+    if (image) {
+      try {
+        generated = await askModel(client, correctAnswer, language, image);
+      } catch (error) {
+        console.error("ai-options image fallback", describeError(error));
+      }
     }
-    const generated = readPayload(readModelJson(content), correctAnswer, language);
     if (!generated) {
-      console.error("ai-options invalid json", content.slice(0, 500));
+      generated = await askModel(client, correctAnswer, language, null);
+    }
+    if (!generated) {
       return Response.json({ message: "AI 回傳的格式不正確" }, { status: 502 });
     }
     return Response.json(generated);

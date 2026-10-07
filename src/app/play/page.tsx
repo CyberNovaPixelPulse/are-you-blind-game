@@ -366,8 +366,8 @@ export default function PlayPage() {
   const answerText = options.find((option) => option.isCorrect)?.text ?? "";
 
   return (
-    <div className="max-w-md mx-auto flex min-h-screen w-full flex-col p-4 font-sans text-zinc-950 md:max-w-4xl md:py-10 dark:text-zinc-50">
-      <header className="mb-4 flex items-center justify-between gap-3">
+    <div className="mx-auto flex h-[100dvh] w-full max-w-md flex-col justify-between overflow-hidden p-3 font-sans text-zinc-950 md:h-auto md:min-h-screen md:max-w-4xl md:overflow-visible md:p-4 md:py-10 dark:text-zinc-50">
+      <header className="mb-2 flex shrink-0 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <Link
             href="/"
@@ -382,12 +382,12 @@ export default function PlayPage() {
         <StreakFlame streak={streak} label={t("streak", { n: streak })} />
       </header>
       {thinLanguage ? (
-        <p className="mb-4 rounded-2xl border border-amber-300/50 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-300/30 dark:bg-amber-950/40 dark:text-amber-100">
+        <p className="mb-2 shrink-0 rounded-2xl border border-amber-300/50 bg-amber-50 px-3 py-1 text-xs text-amber-900 dark:border-amber-300/30 dark:bg-amber-950/40 dark:text-amber-100">
           {t("thinPool")}
         </p>
       ) : null}
-      <div className="flex flex-1 flex-col justify-between gap-6 md:flex-row md:items-center md:gap-8">
-      <section className="flex w-full flex-col gap-4 md:min-w-0 md:flex-1">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 md:flex-row md:items-center md:gap-8">
+      <section className="flex min-h-0 w-full flex-1 flex-col md:min-w-0">
 
         {status === "loading" ? (
           <p className="py-16 text-center text-sm text-zinc-500">{t("drawing")}</p>
@@ -411,7 +411,7 @@ export default function PlayPage() {
         {status === "ready" && question ? (
           <div
             key={question.id}
-            className="relative aspect-square w-full overflow-hidden rounded-3xl bg-zinc-900 shadow-xl shadow-black/25"
+            className="relative min-h-[96px] w-full flex-1 max-h-[min(30vh,220px)] overflow-hidden rounded-3xl bg-zinc-900 shadow-xl shadow-black/25 md:aspect-square md:h-auto md:max-h-none md:min-h-0 md:flex-none"
           >
             {/* 預載用的是同一條公開網址，這裡直接用 img，換題才吃得到瀏覽器快取。 */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -421,8 +421,8 @@ export default function PlayPage() {
               alt={showOriginal ? "揭曉原圖" : "這題的特寫"}
               className={
                 showOriginal
-                  ? "h-full w-full object-contain animate-quiz-reveal"
-                  : "h-full w-full object-cover"
+                  ? "absolute inset-0 h-full w-full object-contain animate-quiz-reveal"
+                  : "absolute inset-0 h-full w-full object-cover"
               }
             />
             {solved ? (
@@ -439,9 +439,9 @@ export default function PlayPage() {
         ) : null}
       </section>
 
-      <section className="flex w-full flex-col gap-3 md:min-w-0 md:flex-1">
+      <section className="flex w-full shrink-0 flex-col gap-2 md:min-w-0 md:flex-1">
         {status === "ready" && question ? (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-4">
             {options.map((option) => {
               const guess = guesses[option.id];
               const pickedWrong = miss?.id === option.id;
@@ -453,7 +453,7 @@ export default function PlayPage() {
                   type="button"
                   disabled={solved || miss !== null}
                   onClick={() => onGuess(option)}
-                  className={`flex h-16 items-center justify-between gap-3 rounded-2xl border px-4 text-left text-lg font-medium ${
+                  className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-base font-medium ${
                     pickedWrong
                       ? "animate-quiz-shake border-red-500 bg-red-500 text-white"
                       : markAnswer
@@ -505,7 +505,7 @@ export default function PlayPage() {
             <button
               type="button"
               onClick={goNextQuestion}
-              className="h-16 rounded-full bg-foreground text-lg font-semibold text-background"
+              className="rounded-full bg-foreground py-3 text-base font-semibold text-background"
             >
               {t("next")}
             </button>
@@ -519,7 +519,7 @@ export default function PlayPage() {
       </section>
       </div>
 
-      <SiteFooter className="mt-8" />
+      <SiteFooter className="mt-8 hidden md:block" />
 
       <AdModal open={adOpen} onComplete={finishClassicAd} />
 

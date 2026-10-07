@@ -13,6 +13,7 @@ import {
   makeRoomCode,
   normalizeRoomCode,
   pickPkQuestionIds,
+  RANDOM_MATCH_WAIT_MS,
   pkTableMissing,
   readRoom,
   startPkRoom,
@@ -273,7 +274,7 @@ export default function PkLobbyPage() {
         router.push(`/pk/${room.room_code}`);
         return;
       }
-      const deadline = Date.now() + 5000;
+      const deadline = Date.now() + RANDOM_MATCH_WAIT_MS;
       while (Date.now() < deadline) {
         if (!stillSearching(generation)) return;
         await sleep(400);
@@ -540,6 +541,7 @@ export default function PkLobbyPage() {
               {fillTemplate(t.pkLobby.searched, { time: formatElapsed(elapsedMs) })}
             </p>
             <p className="mt-3 text-sm text-zinc-300">{t.pkLobby.finding}</p>
+            <p className="mt-1 text-sm text-zinc-400">{t.pkLobby.waitHint}</p>
             <button
               type="button"
               disabled={summoning}

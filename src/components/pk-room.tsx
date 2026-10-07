@@ -11,6 +11,7 @@ import {
   loadPkIdentity,
   pickPkQuestionIds,
   pkTableMissing,
+  RANDOM_MATCH_WAIT_MS,
   readPlayer,
   readRoom,
   saveMyPkScore,
@@ -63,23 +64,39 @@ function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-function PkScoreboard({ players, total }: { players: PkPlayer[]; total: number }) {
+function PkScoreboard({
+  players,
+  total,
+  compact = false,
+}: {
+  players: PkPlayer[];
+  total: number;
+  compact?: boolean;
+}) {
   const ranked = [...players].sort(
     (a, b) => b.total_score - a.total_score || b.current_question - a.current_question,
   );
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className={compact ? "flex shrink-0 gap-1.5" : "flex flex-col gap-2"}>
       {ranked.map((player, index) => {
         const width = total > 0 ? Math.min(100, Math.round((player.current_question / total) * 100)) : 0;
         const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `${index + 1}`;
         return (
           <li
             key={player.user_id}
-            className="rounded-2xl border border-black/10 px-3 py-2 dark:border-white/15"
+            className={
+              compact
+                ? "min-w-0 flex-1 rounded-xl border border-black/10 px-2 py-1 dark:border-white/15"
+                : "rounded-2xl border border-black/10 px-3 py-2 dark:border-white/15"
+            }
           >
             <div className="flex items-center gap-2">
-              <span className="w-6 text-center text-sm font-black">{medal}</span>
-              <PlayerFace player={player} />
+              <span className={`text-center font-black ${compact ? "text-xs" : "w-6 text-sm"}`}>{medal}</span>
+              {compact ? (
+                <UserAvatar name={player.username} src={player.avatar_url} className="h-7 w-7 text-[10px]" />
+              ) : (
+                <PlayerFace player={player} />
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-sm font-semibold">{player.username}</span>
@@ -394,7 +411,7 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
               : "這位對手暫時進不來，請再試一次",
           );
         });
-    }, 5000);
+    }, RANDOM_MATCH_WAIT_MS);
     return () => window.clearTimeout(timer);
   }, [host, user?.id, room?.id, room?.mode, room?.status, rosterKey]);
 
@@ -484,8 +501,14 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col gap-6 px-4 py-8">
-      <div className="flex items-center justify-between gap-3">
+    <main
+      className={
+        inBattle && current
+          ? "mx-auto flex h-[100dvh] w-full max-w-md flex-col justify-between overflow-hidden p-3"
+          : "mx-auto flex min-h-screen w-full max-w-md flex-col gap-6 px-4 py-8"
+      }
+    >
+      <div className="flex shrink-0 items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => void leaveRoom()}
@@ -604,22 +627,22 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
       ) : null}
 
       {phase === "room" && inBattle ? (
-        <section className="flex flex-col gap-4">
-          <header className="flex items-center justify-between gap-3">
-            <h1 className="text-2xl font-black">PK 猜題</h1>
+        <section className="flex min-h-0 flex-1 flex-col justify-between gap-2">
+          <header className="flex shrink-0 items-center justify-between gap-3">
+            <h1 className="text-base font-black">PK 猜題</h1>
             <p className="text-sm font-semibold text-zinc-500">
               {questions.length === 0 ? "載入題目" : `${Math.min(questionIndex + 1, questions.length)} / ${questions.length}`}
             </p>
           </header>
           {current ? (
             <>
-              <PkScoreboard players={boardPlayers} total={questionTotal} />
-              <p className="truncate text-sm text-zinc-500">{current.author_name}</p>
-              <div className="relative aspect-square overflow-hidden rounded-3xl bg-zinc-900">
+              <PkScoreboard players={boardPlayers} total={questionTotal} compact />
+              <p className="truncate text-xs text-zinc-500">{current.author_name}</p>
+              <div className="relative h-[min(30vh,220px)] shrink-0 overflow-hidden rounded-3xl bg-zinc-900">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={publicImageUrl(current.crop_image_path)} alt="這題的特寫" className="h-full w-full object-cover" />
               </div>
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid shrink-0 grid-cols-1 gap-2">
                 {current.options.map((option) => {
                   const selected = pickedId === option.id;
                   const revealed = pickedId !== null;
@@ -634,7 +657,7 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
                       type="button"
                       disabled={revealed}
                       onClick={() => answer(option)}
-                      className={`h-14 rounded-2xl border px-4 text-left text-base font-medium ${tone}`}
+                      className={`rounded-2xl border px-4 py-3 text-left text-base font-medium ${tone}`}
                     >
                       {option.text}
                     </button>
