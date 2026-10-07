@@ -77,7 +77,7 @@ function PkScoreboard({
     (a, b) => b.total_score - a.total_score || b.current_question - a.current_question,
   );
   return (
-    <ul className={compact ? "flex shrink-0 gap-1.5" : "flex flex-col gap-2"}>
+    <ul className={compact ? "flex w-full shrink-0 gap-1.5" : "flex flex-col gap-2"}>
       {ranked.map((player, index) => {
         const width = total > 0 ? Math.min(100, Math.round((player.current_question / total) * 100)) : 0;
         const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `${index + 1}`;
@@ -504,7 +504,7 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
     <main
       className={
         inBattle && current
-          ? "mx-auto flex h-[100dvh] w-full max-w-md flex-col justify-between overflow-hidden p-3"
+          ? "mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden p-3"
           : "mx-auto flex min-h-screen w-full max-w-md flex-col gap-6 px-4 py-8"
       }
     >
@@ -627,8 +627,8 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
       ) : null}
 
       {phase === "room" && inBattle ? (
-        <section className="flex min-h-0 flex-1 flex-col justify-between gap-2">
-          <header className="flex shrink-0 items-center justify-between gap-3">
+        <section className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
+          <header className="flex w-full shrink-0 items-center justify-between gap-3">
             <h1 className="text-base font-black">PK 猜題</h1>
             <p className="text-sm font-semibold text-zinc-500">
               {questions.length === 0 ? "載入題目" : `${Math.min(questionIndex + 1, questions.length)} / ${questions.length}`}
@@ -638,11 +638,11 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
             <>
               <PkScoreboard players={boardPlayers} total={questionTotal} compact />
               <p className="truncate text-xs text-zinc-500">{current.author_name}</p>
-              <div className="relative h-[min(30vh,220px)] shrink-0 overflow-hidden rounded-3xl bg-zinc-900">
+              <div className="relative mx-auto aspect-square w-[min(100%,280px,calc(100dvh-420px))] max-w-[280px] shrink-0 overflow-hidden rounded-2xl shadow-2xl sm:w-[min(100%,320px,calc(100dvh-420px))] sm:max-w-[320px]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={publicImageUrl(current.crop_image_path)} alt="這題的特寫" className="h-full w-full object-cover" />
+                <img src={publicImageUrl(current.crop_image_path)} alt="這題的特寫" className="absolute inset-0 h-full w-full object-cover" />
               </div>
-              <div className="grid shrink-0 grid-cols-1 gap-2">
+              <div className="grid w-full max-w-[280px] shrink-0 grid-cols-1 gap-3 sm:max-w-[320px]">
                 {current.options.map((option) => {
                   const selected = pickedId === option.id;
                   const revealed = pickedId !== null;

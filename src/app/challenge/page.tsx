@@ -393,7 +393,7 @@ export default function ChallengePage() {
     <div
       className={`mx-auto flex w-full max-w-md flex-col font-sans text-zinc-950 md:max-w-4xl dark:text-zinc-50 ${
         phase === "play"
-          ? "h-[100dvh] justify-between overflow-hidden p-3 md:h-auto md:min-h-screen md:overflow-visible md:p-4 md:py-10"
+          ? "h-[100dvh] overflow-hidden p-3 md:h-auto md:min-h-screen md:overflow-visible md:p-4 md:py-10"
           : "min-h-screen p-4 md:py-10"
       }`}
     >
@@ -458,8 +458,8 @@ export default function ChallengePage() {
       ) : null}
 
       {phase === "play" ? (
-        <div className="flex min-h-0 flex-1 flex-col justify-between gap-2 md:flex-row md:items-center">
-          <section className="w-full md:flex-1">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
+          <section className="flex w-full flex-col items-center">
             {status === "loading" ? <p className="py-16 text-center text-sm text-zinc-500">{t("drawing")}</p> : null}
             {status === "empty" ? (
               <p className="py-10 text-sm text-zinc-600 dark:text-zinc-400">還沒有可以挑戰的題目。</p>
@@ -471,8 +471,8 @@ export default function ChallengePage() {
             ) : null}
             {status === "ready" && question ? (
               <div
-                className={`relative h-[min(30vh,220px)] overflow-hidden rounded-3xl border-4 bg-zinc-900 shadow-xl md:aspect-square md:h-auto md:max-h-none ${
-                  urgent ? "animate-challenge-alarm border-red-500" : "border-transparent"
+                className={`relative mx-auto aspect-square w-[min(100%,280px,calc(100dvh-340px))] max-w-[280px] overflow-hidden rounded-2xl shadow-2xl sm:w-[min(100%,320px,calc(100dvh-340px))] sm:max-w-[320px] ${
+                  urgent ? "animate-challenge-alarm ring-4 ring-red-500" : ""
                 }`}
               >
                 <Image
@@ -480,13 +480,13 @@ export default function ChallengePage() {
                   alt="這題的特寫"
                   fill
                   priority
-                  sizes="(max-width: 768px) 100vw, 480px"
-                  className="object-cover"
+                  sizes="320px"
+                  className="h-full w-full object-cover"
                 />
               </div>
             ) : null}
           </section>
-          <section className="flex w-full shrink-0 flex-col gap-2 md:flex-1">
+          <section className="flex w-full max-w-[280px] shrink-0 flex-col gap-3 sm:max-w-[320px]">
             {status === "ready"
               ? options.map((option) => (
                   <button

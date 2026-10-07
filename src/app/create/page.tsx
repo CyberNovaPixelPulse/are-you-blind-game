@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Area, Point } from "react-easy-crop";
 import type { User } from "@supabase/supabase-js";
-import { cropToFile, compressToWebp, cropToAiJpegBase64 } from "@/lib/image";
+import { cropToFile, compressCloseupToWebp, compressToWebp, cropToAiJpegBase64 } from "@/lib/image";
 import type { CreateQuizCopy } from "@/lib/create-copy";
 import { isLanguageCode, LANGUAGES, type LanguageCode } from "@/lib/languages";
 import { fillTemplate } from "@/lib/ui-sections";
@@ -472,9 +472,7 @@ export default function CreatePage() {
       setPhase("compressing");
 
       const cropped = await cropToFile(imageUrl, croppedAreaPixels);
-      const cropFile = await compressToWebp(cropped, "crop.webp").catch(() => {
-        throw new Error(copy.cropCompressFail);
-      });
+      const cropFile = await compressCloseupToWebp(cropped, "crop.webp");
 
       setPhase("moderating");
       const correctAnswer = options[correctIndex]?.optionText.trim() ?? "";

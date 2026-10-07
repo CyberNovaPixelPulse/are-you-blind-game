@@ -366,7 +366,7 @@ export default function PlayPage() {
   const answerText = options.find((option) => option.isCorrect)?.text ?? "";
 
   return (
-    <div className="mx-auto flex h-[100dvh] w-full max-w-md flex-col justify-between overflow-hidden p-3 font-sans text-zinc-950 md:h-auto md:min-h-screen md:max-w-4xl md:overflow-visible md:p-4 md:py-10 dark:text-zinc-50">
+    <div className="mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden p-3 font-sans text-zinc-950 md:h-auto md:min-h-screen md:overflow-visible md:p-4 md:py-10 dark:text-zinc-50">
       <header className="mb-2 flex shrink-0 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <Link
@@ -386,8 +386,8 @@ export default function PlayPage() {
           {t("thinPool")}
         </p>
       ) : null}
-      <div className="flex min-h-0 flex-1 flex-col gap-2 md:flex-row md:items-center md:gap-8">
-      <section className="flex min-h-0 w-full flex-1 flex-col md:min-w-0">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
+      <section className="flex w-full flex-col items-center">
 
         {status === "loading" ? (
           <p className="py-16 text-center text-sm text-zinc-500">{t("drawing")}</p>
@@ -411,7 +411,7 @@ export default function PlayPage() {
         {status === "ready" && question ? (
           <div
             key={question.id}
-            className="relative min-h-[96px] w-full flex-1 max-h-[min(30vh,220px)] overflow-hidden rounded-3xl bg-zinc-900 shadow-xl shadow-black/25 md:aspect-square md:h-auto md:max-h-none md:min-h-0 md:flex-none"
+            className="relative mx-auto aspect-square w-[min(100%,280px,calc(100dvh-320px))] max-w-[280px] overflow-hidden rounded-2xl shadow-2xl sm:w-[min(100%,320px,calc(100dvh-320px))] sm:max-w-[320px]"
           >
             {/* 預載用的是同一條公開網址，這裡直接用 img，換題才吃得到瀏覽器快取。 */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -421,7 +421,7 @@ export default function PlayPage() {
               alt={showOriginal ? "揭曉原圖" : "這題的特寫"}
               className={
                 showOriginal
-                  ? "absolute inset-0 h-full w-full object-contain animate-quiz-reveal"
+                  ? "absolute inset-0 h-full w-full object-cover animate-quiz-reveal"
                   : "absolute inset-0 h-full w-full object-cover"
               }
             />
@@ -439,9 +439,9 @@ export default function PlayPage() {
         ) : null}
       </section>
 
-      <section className="flex w-full shrink-0 flex-col gap-2 md:min-w-0 md:flex-1">
+      <section className="flex w-full max-w-[280px] shrink-0 flex-col gap-3 sm:max-w-[320px]">
         {status === "ready" && question ? (
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-4">
+          <div className="grid grid-cols-1 gap-3">
             {options.map((option) => {
               const guess = guesses[option.id];
               const pickedWrong = miss?.id === option.id;
