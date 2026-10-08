@@ -5,6 +5,20 @@ import { useLanguage } from "@/components/language-provider";
 
 type PlanId = "monthly" | "lifetime";
 
+function SupportNotice({ text, email }: { text: string; email: string }) {
+  const index = text.indexOf(email);
+  if (index === -1) return text;
+  return (
+    <>
+      {text.slice(0, index)}
+      <a href={`mailto:${email}`} className="underline underline-offset-2">
+        {email}
+      </a>
+      {text.slice(index + email.length)}
+    </>
+  );
+}
+
 export function VipPurchaseModal({
   onClose,
   onCheckout,
@@ -86,6 +100,7 @@ export function VipPurchaseModal({
               </span>
               <p className="text-xs font-bold tracking-wide text-amber-200">{copy.planATitle}</p>
               <p className="mt-1 text-lg font-black">{copy.planAPrice}</p>
+              <p className="mt-1 text-sm text-amber-50/75">{copy.planADesc}</p>
             </label>
             <label
               className={`cursor-pointer rounded-2xl border p-4 ${
@@ -107,6 +122,7 @@ export function VipPurchaseModal({
               <p className="text-sm text-amber-50/75">{copy.planBDesc}</p>
             </label>
           </div>
+          <p className="mt-3 text-sm font-medium leading-6 text-amber-100">{copy.deliveryNote}</p>
         </fieldset>
 
         <button
@@ -116,6 +132,13 @@ export function VipPurchaseModal({
         >
           {copy.payBtn}
         </button>
+        <ul className="mt-4 flex flex-col gap-2 text-xs leading-5 text-neutral-400">
+          <li>{copy.payNoticeEcpay}</li>
+          <li>{copy.payNoticeRefund}</li>
+          <li>
+            <SupportNotice text={copy.payNoticeSupport} email={copy.supportEmail} />
+          </li>
+        </ul>
         <button
           type="button"
           onClick={onClose}

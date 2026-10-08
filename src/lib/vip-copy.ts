@@ -1,4 +1,4 @@
-import type { LanguageCode } from "@/lib/languages";
+import { VIP_CHECKOUT_COPY, type LanguageCode, type VipCheckoutCopy } from "@/lib/languages";
 
 export type VipModalCopy = {
   title: string;
@@ -15,16 +15,45 @@ export type VipModalCopy = {
   planATitle: string;
   planABadge: string;
   planAPrice: string;
+  planADesc: string;
   planBTitle: string;
   planBPrice: string;
   planBDesc: string;
+  deliveryNote: string;
+  payNoticeEcpay: string;
+  payNoticeRefund: string;
+  payNoticeSupport: string;
+  supportEmail: string;
   payBtn: string;
   closeBtn: string;
   testToggle: string;
   testBusy: string;
 };
 
-const VIP_COPY: Record<LanguageCode, VipModalCopy> = {
+type VipModalBase = Omit<
+  VipModalCopy,
+  | "planADesc"
+  | "deliveryNote"
+  | "payNoticeEcpay"
+  | "payNoticeRefund"
+  | "payNoticeSupport"
+  | "supportEmail"
+>;
+
+const ZH_CN_CHECKOUT: VipCheckoutCopy = {
+  planAPrice: "新台币 NT$ 19 / 月",
+  planADesc: "自建好友房、全站免广告",
+  planBPrice: "新台币 NT$ 39 终身买断",
+  planBDesc: "自建好友房、全站免广告，一次付清永久使用",
+  deliveryNote: "付款成功后系统立即开通权益",
+  payNoticeEcpay: "• 本服务由绿界科技 ECPay 提供安全加密付款支持",
+  payNoticeRefund:
+    "• 购买须知：本方案属非以有形媒介提供的数字服务，完成付款开通后，依消保法第十九条第二项规定，不适用七天鉴赏期无条件退换货。",
+  payNoticeSupport: "• 如遇付款或权限开通问题，请联系客服信箱：support@areyoublind.game（或站长信箱）",
+  supportEmail: "support@areyoublind.game",
+};
+
+const VIP_COPY: Record<LanguageCode, VipModalBase> = {
   "zh-TW": {
     title: "👑 升級 VIP 尊榮會員",
     subtitle: "解鎖好友房間隨時開黑，享受全站純淨零廣告！",
@@ -39,10 +68,10 @@ const VIP_COPY: Record<LanguageCode, VipModalCopy> = {
     promoBadge: "驗證期特惠",
     planATitle: "方案 A · 推薦",
     planABadge: "限時嘗鮮價",
-    planAPrice: "NT$ 19 / 月",
+    planAPrice: "新台幣 NT$ 19 / 月",
     planBTitle: "方案 B",
-    planBPrice: "NT$ 39",
-    planBDesc: "一次性終身買斷（永久去廣告，解鎖所有功能）",
+    planBPrice: "新台幣 NT$ 39 終身買斷",
+    planBDesc: "自建好友房、全站免廣告，一次付清永久使用",
     payBtn: "💳 前往付款開通特權",
     closeBtn: "先不用，我知道了",
     testToggle: "🛠️ 本機測試模式：一鍵切換 VIP",
@@ -62,10 +91,10 @@ const VIP_COPY: Record<LanguageCode, VipModalCopy> = {
     promoBadge: "验证期特惠",
     planATitle: "方案 A · 推荐",
     planABadge: "限时尝鲜价",
-    planAPrice: "NT$ 19 / 月",
+    planAPrice: "新台币 NT$ 19 / 月",
     planBTitle: "方案 B",
-    planBPrice: "NT$ 39",
-    planBDesc: "一次性终身买断（永久去广告，解锁所有功能）",
+    planBPrice: "新台币 NT$ 39 终身买断",
+    planBDesc: "自建好友房、全站免广告，一次付清永久使用",
     payBtn: "💳 前往付款开通特权",
     closeBtn: "先不用，我知道了",
     testToggle: "🛠️ 本机测试模式：一键切换 VIP",
@@ -85,10 +114,10 @@ const VIP_COPY: Record<LanguageCode, VipModalCopy> = {
     promoBadge: "Special Offer",
     planATitle: "Plan A · Popular",
     planABadge: "Limited Time",
-    planAPrice: "NT$ 19 / mo",
+    planAPrice: "New Taiwan Dollar NT$ 19 / month",
     planBTitle: "Plan B",
-    planBPrice: "NT$ 39",
-    planBDesc: "Lifetime purchase (Permanent ad-free, unlock all features)",
+    planBPrice: "New Taiwan Dollar NT$ 39 lifetime",
+    planBDesc: "Private friend rooms and an ad-free experience, paid once for lifetime access",
     payBtn: "💳 Proceed to Checkout",
     closeBtn: "Maybe later, I got it",
     testToggle: "🛠️ Dev Mode: Toggle VIP",
@@ -717,6 +746,26 @@ const VIP_COPY: Record<LanguageCode, VipModalCopy> = {
   },
 };
 
+function checkoutFor(language: LanguageCode): VipCheckoutCopy {
+  if (language === "zh-TW") return VIP_CHECKOUT_COPY["zh-TW"];
+  if (language === "zh-CN") return ZH_CN_CHECKOUT;
+  return VIP_CHECKOUT_COPY.en;
+}
+
 export function vipCopyFor(language: LanguageCode): VipModalCopy {
-  return VIP_COPY[language] ?? VIP_COPY.en;
+  const base = VIP_COPY[language] ?? VIP_COPY.en;
+  const checkout = checkoutFor(language);
+  const localizedPrice = language === "zh-TW" || language === "zh-CN" || language === "en";
+  return {
+    ...base,
+    planAPrice: localizedPrice ? checkout.planAPrice : `TWD ${base.planAPrice}`,
+    planADesc: checkout.planADesc,
+    planBPrice: localizedPrice ? checkout.planBPrice : `TWD ${base.planBPrice}`,
+    planBDesc: localizedPrice ? checkout.planBDesc : base.planBDesc,
+    deliveryNote: checkout.deliveryNote,
+    payNoticeEcpay: checkout.payNoticeEcpay,
+    payNoticeRefund: checkout.payNoticeRefund,
+    payNoticeSupport: checkout.payNoticeSupport,
+    supportEmail: checkout.supportEmail,
+  };
 }

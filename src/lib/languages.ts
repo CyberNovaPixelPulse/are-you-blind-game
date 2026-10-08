@@ -122,3 +122,43 @@ export function resolveLanguage(stored: string | null, navigatorLanguage: string
   if (stored && isLanguageCode(stored)) return stored;
   return matchNavigatorLanguage(navigatorLanguage);
 }
+
+export type VipCheckoutCopy = {
+  planAPrice: string;
+  planADesc: string;
+  planBPrice: string;
+  planBDesc: string;
+  deliveryNote: string;
+  payNoticeEcpay: string;
+  payNoticeRefund: string;
+  payNoticeSupport: string;
+  supportEmail: string;
+};
+
+export const VIP_CHECKOUT_COPY: Record<"zh-TW" | "en", VipCheckoutCopy> = {
+  "zh-TW": {
+    planAPrice: "新台幣 NT$ 19 / 月",
+    planADesc: "自建好友房、全站免廣告",
+    planBPrice: "新台幣 NT$ 39 終身買斷",
+    planBDesc: "自建好友房、全站免廣告，一次付清永久使用",
+    deliveryNote: "付款成功後系統立即開通權益",
+    payNoticeEcpay: "• 本服務由綠界科技 ECPay 提供安全加密付款支援",
+    payNoticeRefund:
+      "• 購買須知：本方案屬非以有形媒介提供之數位服務，完成付款開通後，依消保法第十九條第二項規定，不適用七天鑑賞期無條件退換貨。",
+    payNoticeSupport: "• 如遇付款或權限開通問題，請聯繫客服信箱：support@areyoublind.game（或站長信箱）",
+    supportEmail: "support@areyoublind.game",
+  },
+  en: {
+    planAPrice: "New Taiwan Dollar NT$ 19 / month",
+    planADesc: "Private friend rooms and an ad-free experience",
+    planBPrice: "New Taiwan Dollar NT$ 39 lifetime",
+    planBDesc: "Private friend rooms and an ad-free experience, paid once for lifetime access",
+    deliveryNote: "Access is activated immediately after successful payment.",
+    payNoticeEcpay: "• Payments are securely encrypted by ECPay (Green World FinTech).",
+    payNoticeRefund:
+      "• Purchase notice: This plan is a digital service not supplied on a tangible medium. After payment and activation, the seven-day cooling-off period for unconditional returns does not apply, under Article 19, Paragraph 2 of the Consumer Protection Act.",
+    payNoticeSupport:
+      "• For payment or access issues, contact support@areyoublind.game (or the site owner).",
+    supportEmail: "support@areyoublind.game",
+  },
+};

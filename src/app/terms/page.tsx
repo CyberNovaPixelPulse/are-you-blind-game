@@ -4,7 +4,7 @@ import { SiteFooter } from "@/components/site-footer";
 
 export const metadata: Metadata = {
   title: "服務條款與免責聲明",
-  description: "AreYouBlind 的服務性質、著作權通知、出題守則與廣告 Cookie 說明。",
+  description: "AreYouBlind 的服務性質、著作權通知、出題守則、廣告 Cookie 與數位商品退款說明。",
 };
 
 const sections = [
@@ -37,6 +37,15 @@ const sections = [
     paragraphs: [
       "本站可能透過 Google AdSense 等第三方廣告聯播網投放廣告。這些廣告商可能使用 Cookie 或類似技術，收集非敏感的瀏覽資訊，例如你大約看過哪些頁面，用來估算廣告成效並優化體驗。",
       "這類 Cookie 由廣告合作方依其自身政策設置，不用來向本站索取你的密碼或證件資料。你也可以在瀏覽器設定中限制或清除 Cookie。繼續使用本站，即表示你理解本服務會出現上述第三方廣告。",
+    ],
+  },
+  {
+    id: "refund",
+    title: "5. 數位商品購買與退款政策（Refund Policy）",
+    paragraphs: [
+      "VIP 方案以新台幣計價。月費方案為新台幣 NT$ 19 / 月，按付款週期持續提供自建好友房與全站免廣告。終身買斷方案為新台幣 NT$ 39，一次付清後永久提供相同權益，不會按月再收費。",
+      "付款由綠界科技 ECPay 提供安全加密處理。付款成功後，系統立即開通對應權益。這是線上自動交付，不另寄送實體商品或有形媒介。",
+      "本方案屬非以有形媒介提供之數位服務。完成付款並開通權益後，依消費者保護法第十九條第二項規定，不適用七天鑑賞期無條件退換貨。",
     ],
   },
 ] as const;
@@ -85,6 +94,18 @@ export default function TermsPage() {
                   contact@areyoublind.game
                 </a>
                 ，或寄到站長信箱。來信請附上：權利說明、涉嫌侵權的題目位置，以及你的聯絡方式。核實後，本站將於 24 小時內下架該題。
+              </p>
+            ) : null}
+            {section.id === "refund" ? (
+              <p className="text-sm leading-7 text-zinc-600 dark:text-zinc-400">
+                如遇付款失敗、重複扣款或權限沒有開通，請聯繫客服信箱{" "}
+                <a
+                  href="mailto:support@areyoublind.game"
+                  className="font-medium text-zinc-800 underline decoration-zinc-400 underline-offset-4 dark:text-zinc-200"
+                >
+                  support@areyoublind.game
+                </a>
+                ，或寄到站長信箱。本站會依付款紀錄協助查核開通狀態。
               </p>
             ) : null}
           </div>
