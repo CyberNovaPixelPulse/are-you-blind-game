@@ -15,6 +15,27 @@ import { supabase } from "@/lib/supabase";
 const Cropper = dynamic(() => import("react-easy-crop"), { ssr: false });
 
 const OPTION_COUNT = 4;
+const AUTHOR_NICKNAME_KEY = "author_nickname";
+
+function readStoredAuthorName() {
+  try {
+    const value = localStorage.getItem(AUTHOR_NICKNAME_KEY);
+    if (typeof value !== "string") return "";
+    return value.trim().slice(0, 40);
+  } catch {
+    return "";
+  }
+}
+
+function writeStoredAuthorName(name: string) {
+  const trimmed = name.trim().slice(0, 40);
+  if (!trimmed) return;
+  try {
+    localStorage.setItem(AUTHOR_NICKNAME_KEY, trimmed);
+  } catch {
+    // Private mode or quota; the in-memory name still stays for this session.
+  }
+}
 
 type OptionDraft = {
   optionText: string;
@@ -247,6 +268,13 @@ export default function CreatePage() {
   const [aiError, setAiError] = useState("");
   const [result, setResult] = useState<PublishResult | null>(null);
   const [scoreOpen, setScoreOpen] = useState(false);
+
+  useEffect(() => {
+    const stored = readStoredAuthorName();
+    if (!stored) return;
+    authorTouched.current = true;
+    setAuthorName(stored);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -564,6 +592,9 @@ export default function CreatePage() {
       if (questionInsert.error) throw new Error(questionInsert.error.message);
 
       saved = true;
+      const publishedName = authorName.trim();
+      writeStoredAuthorName(publishedName);
+      authorTouched.current = true;
       setScoreOpen(false);
       setResult({
         cropUrl: URL.createObjectURL(cropFile),
@@ -578,7 +609,6 @@ export default function CreatePage() {
       setCroppedAreaPixels(null);
       setOptions(emptyOptions());
       setCorrectIndex(0);
-      setAuthorName("");
     } catch (error) {
       if (!saved) {
         if (uploaded.length > 0) {
@@ -856,6 +886,7 @@ export default function CreatePage() {
               onChange={(event) => {
                 authorTouched.current = true;
                 setAuthorName(event.target.value);
+                writeStoredAuthorName(event.target.value);
               }}
               placeholder={copy.authorPlaceholder}
               className="h-11 rounded-xl border border-black/10 bg-white px-3 font-normal outline-none focus:border-zinc-950 dark:border-white/15 dark:bg-zinc-950 dark:focus:border-zinc-50"
