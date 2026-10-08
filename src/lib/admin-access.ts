@@ -4,14 +4,25 @@ import { notFound } from "next/navigation";
 
 const COOKIE = "quiz_admin";
 
-function digest(value: string): Buffer {
-  return createHash("sha256").update(value).digest();
-}
-
 export function adminKeyMatches(input: string): boolean {
   const secret = process.env.ADMIN_SECRET;
-  if (!secret || !input) return false;
-  return timingSafeEqual(digest(input), digest(secret));
+  if (typeof secret !== "string" || secret.length === 0) return false;
+  const key = typeof input === "string" ? input.trim() : "";
+  if (key.length === 0 || key.length !== secret.length) return false;
+  const left = Buffer.from(key);
+  const right = Buffer.from(secret);
+  if (left.length !== right.length) return false;
+  return timingSafeEqual(left, right);
+}
+
+export async function clearAdminCookie() {
+  const jar = await cookies();
+  jar.set(COOKIE, "", {
+    httpOnly: true,
+    sameSite: "strict",
+    path: "/",
+    maxAge: 0,
+  });
 }
 
 export function adminCookieValue(): string | null {

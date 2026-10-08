@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AdminBoard } from "@/app/admin/admin-board";
+import { AdminGate } from "@/app/admin/admin-gate";
 import type { AdminQuestion, AdminReport } from "@/app/admin/types";
-import { unlockAdmin } from "@/app/admin/actions";
 import { assertLocalDev, hasAdminSession } from "@/lib/admin-access";
 import { readStoredOptions } from "@/lib/question-options";
 import { quizImageUrl } from "@/lib/quiz-image";
@@ -81,36 +81,6 @@ function readBreakdown(value: unknown): Record<string, unknown> {
 
 function publicImageUrl(path: string): string {
   return quizImageUrl(path);
-}
-
-function AdminGate() {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-6 font-sans text-zinc-950 dark:bg-black dark:text-zinc-50">
-      <form
-        action={unlockAdmin}
-        className="w-full max-w-sm rounded-2xl border border-black/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-zinc-950"
-      >
-        <h1 className="text-xl font-semibold">管理金鑰</h1>
-        <p className="mt-2 text-sm text-zinc-500">只接受本機開發環境。</p>
-        <label className="mt-5 flex flex-col gap-2 text-sm font-medium">
-          金鑰
-          <input
-            name="key"
-            type="password"
-            autoComplete="current-password"
-            required
-            className="h-11 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus:border-zinc-950 dark:border-white/15 dark:focus:border-zinc-50"
-          />
-        </label>
-        <button
-          type="submit"
-          className="mt-5 h-11 w-full rounded-full bg-foreground text-sm font-semibold text-background"
-        >
-          進入
-        </button>
-      </form>
-    </main>
-  );
 }
 
 export default async function AdminPage() {

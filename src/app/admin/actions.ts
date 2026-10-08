@@ -2,12 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import {
   adminCookieName,
   adminCookieValue,
   adminKeyMatches,
   assertLocalDev,
+  clearAdminCookie,
   hasAdminSession,
   requireAdmin,
 } from "@/lib/admin-access";
@@ -21,11 +22,30 @@ function refreshAdmin() {
   revalidatePath("/admin");
 }
 
-export async function unlockAdmin(formData: FormData) {
+export type UnlockState = {
+  error: string;
+  nonce: string;
+};
+
+const KEY_REJECTED = "金鑰錯誤，請重新輸入";
+
+function rejectedKey(): UnlockState {
+  return { error: KEY_REJECTED, nonce: crypto.randomUUID() };
+}
+
+export async function unlockAdmin(_previous: UnlockState, formData: FormData): Promise<UnlockState> {
   await assertLocalDev();
-  const key = String(formData.get("key") ?? "");
+  const raw = formData instanceof FormData ? formData.get("key") : null;
+  const key = typeof raw === "string" ? raw : "";
+  if (!adminKeyMatches(key)) {
+    await clearAdminCookie();
+    return rejectedKey();
+  }
   const cookie = adminCookieValue();
-  if (!adminKeyMatches(key) || !cookie) notFound();
+  if (!cookie) {
+    await clearAdminCookie();
+    return rejectedKey();
+  }
   const jar = await cookies();
   jar.set(adminCookieName(), cookie, {
     httpOnly: true,
@@ -33,6 +53,13 @@ export async function unlockAdmin(formData: FormData) {
     path: "/",
     maxAge: 60 * 60 * 12,
   });
+  redirect("/admin");
+}
+
+export async function lockAdmin() {
+  await assertLocalDev();
+  await clearAdminCookie();
+  redirect("/admin");
 }
 
 export async function widenAdminCookie() {

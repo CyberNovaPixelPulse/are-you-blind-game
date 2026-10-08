@@ -11,8 +11,10 @@ import {
   updateQuestion,
   updateQuestionScore,
   updateQuestionsStatus,
+  lockAdmin,
   widenAdminCookie,
 } from "@/app/admin/actions";
+import { clearAdminClientCache } from "@/app/admin/admin-client-cache";
 import type { AdminQuestion } from "@/app/admin/types";
 import { isLanguageCode, languageByCode, SUPPORTED_LANGUAGES, type LanguageCode } from "@/lib/languages";
 import { DIFFICULTIES, isDifficulty, type Difficulty } from "@/lib/question-options";
@@ -858,6 +860,20 @@ export function AdminBoard({
                 登出這個帳號
               </button>
             ) : null}
+            <form
+              action={lockAdmin}
+              className="mt-3"
+              onSubmit={() => {
+                clearAdminClientCache();
+              }}
+            >
+              <button
+                type="submit"
+                className="h-9 rounded-full border border-black/10 px-4 text-sm font-medium text-zinc-600 hover:bg-black/[.04] dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[.08]"
+              >
+                鎖定後台
+              </button>
+            </form>
           </div>
           <button
             type="button"
