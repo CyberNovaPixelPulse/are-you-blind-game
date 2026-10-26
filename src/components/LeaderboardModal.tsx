@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { LeaderboardEntry } from "@/lib/leaderboard";
 import { UserAvatar } from "@/components/user-avatar";
 
@@ -97,14 +97,17 @@ export function LeaderboardModal({
   unavailable: boolean;
   loggedIn: boolean;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+    const dialog = dialogRef.current;
+    if (!open || !dialog) return;
+    const trigger = document.activeElement;
+    dialog.showModal();
+    return () => {
+      dialog.close();
+      if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -114,11 +117,24 @@ export function LeaderboardModal({
   const rest = entries.filter((entry) => entry.rank > 3);
 
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-zinc-950 text-zinc-50" role="presentation" onClick={onClose}>
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="ladder-title"
+      className="fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none border-0 bg-zinc-950 p-0 text-zinc-50"
+      onCancel={(event) => { event.preventDefault(); onClose(); }}
+      onKeyDown={(event) => {
+        if (event.key !== "Tab") return;
+        const controls = event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey ? document.activeElement === first : document.activeElement === last) {
+          event.preventDefault();
+          (event.shiftKey ? last : first)?.focus();
+        }
+      }}
+      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+    >
       <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="ladder-title"
         className="mx-auto flex h-full w-full max-w-3xl flex-col"
         onClick={(event) => event.stopPropagation()}
       >
@@ -132,7 +148,7 @@ export function LeaderboardModal({
           <button
             type="button"
             onClick={onClose}
-            className="h-10 rounded-full border border-white/15 px-4 text-sm font-medium"
+            className="h-11 min-w-11 rounded-full border border-white/15 px-4 text-sm font-medium"
           >
             關閉
           </button>
@@ -189,6 +205,6 @@ export function LeaderboardModal({
           )}
         </footer>
       </div>
-    </div>
+    </dialog>
   );
 }

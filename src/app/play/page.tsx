@@ -14,6 +14,7 @@ import { readSeenIds, rememberSeen, writeSeenIds } from "@/lib/seen-questions";
 import { createAnswerRoundtrip, requestAnswer } from "@/lib/answer-roundtrip";
 import { useAnsweredHistory } from "@/lib/use-answered-history";
 import { createQuestionPool } from "@/lib/question-pool";
+import { uxCopyFor } from "@/lib/ux-copy";
 
 type Question = DrawnQuestion;
 
@@ -132,6 +133,7 @@ async function celebrateMilestone() {
 
 export default function PlayPage() {
   const { language, t } = useLanguage();
+  const copy = uxCopyFor(language);
   const { captureAnswered, unsyncedCount } = useAnsweredHistory();
   const [question, setQuestion] = useState<Question | null>(null);
   const [options, setOptions] = useState<QuizOption[]>([]);
@@ -363,16 +365,16 @@ export default function PlayPage() {
   const answerText = revealedAnswer || options.find((option) => option.isCorrect)?.text || "";
 
   return (
-    <div className="mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden p-3 font-sans text-zinc-950 md:h-auto md:min-h-screen md:overflow-visible md:p-4 md:py-10 dark:text-zinc-50">
+    <div className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col p-3 font-sans text-zinc-950 md:h-auto md:min-h-screen md:overflow-visible md:p-4 md:py-10 dark:text-zinc-50">
       <header className="mb-2 flex shrink-0 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <Link
             href="/"
-            aria-label="返回首頁"
-            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] hover:text-zinc-950 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[.08] dark:hover:text-zinc-50"
+            aria-label={t.createQuiz.backHome}
+            className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] hover:text-zinc-950 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[.08] dark:hover:text-zinc-50"
           >
             <span aria-hidden="true">←</span>
-            返回首頁
+            {t.createQuiz.backHome}
           </Link>
           <p className="truncate text-sm text-zinc-500">{authorName}</p>
         </div>
@@ -384,7 +386,7 @@ export default function PlayPage() {
           {t("thinPool")}
         </p>
       ) : null}
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 py-3">
       <section className="flex w-full flex-col items-center">
 
         {status === "loading" ? (
@@ -402,7 +404,7 @@ export default function PlayPage() {
 
         {status === "error" ? (
           <p role="alert" className="py-10 text-sm text-red-600 dark:text-red-400">
-            {errorMessage}
+            {copy.loadError}
           </p>
         ) : null}
 
@@ -416,7 +418,7 @@ export default function PlayPage() {
             <img
               key={showOriginal ? "original" : "crop"}
               src={showOriginal ? revealedOriginalUrl : publicImageUrl(question.crop_image_path)}
-              alt={showOriginal ? "揭曉原圖" : "這題的特寫"}
+              alt={showOriginal ? t.createQuiz.originalAlt : copy.cropAlt}
               onError={() => { if (showOriginal) setRevealedOriginalUrl(""); }}
               className={
                 showOriginal
@@ -439,6 +441,9 @@ export default function PlayPage() {
       </section>
 
       <section className="flex w-full max-w-[280px] shrink-0 flex-col gap-3 sm:max-w-[320px]">
+        <p role="status" aria-live="polite" className="min-h-5 text-center text-sm text-zinc-600 dark:text-zinc-300">
+          {guessPending ? copy.checking : ""}
+        </p>
         {status === "ready" && question ? (
           <div className="grid grid-cols-1 gap-3">
             {options.map((option) => {
@@ -452,7 +457,7 @@ export default function PlayPage() {
                   type="button"
                   disabled={solved || miss !== null || guessPending || lockedOption !== null}
                   onClick={() => onGuess(option)}
-                  className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-base font-medium ${
+                  className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-start text-base font-medium ${
                     pickedWrong
                       ? "animate-quiz-shake border-red-500 bg-red-500 text-white"
                       : markAnswer
@@ -462,10 +467,10 @@ export default function PlayPage() {
                           : "border-black/10 bg-white active:bg-black/[.04] dark:border-white/[.12] dark:bg-zinc-950 dark:active:bg-white/[.06]"
                   }`}
                 >
-                  <span className="min-w-0 truncate">{option.text}</span>
+                  <span className="min-w-0 break-words [overflow-wrap:anywhere]">{option.text}</span>
                   {markAnswer ? (
                     <span className="shrink-0 rounded-full bg-emerald-500 px-2 py-0.5 text-xs font-bold text-white">
-                      正解
+                      {copy.correctAnswer}
                     </span>
                   ) : null}
                 </button>
@@ -476,17 +481,17 @@ export default function PlayPage() {
 
         {errorMessage && status === "ready" ? (
           <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-            {errorMessage}
+            {answerFailure === "unavailable" ? copy.unavailable : copy.answerError}
           </p>
         ) : null}
 
         {answerFailure === "retryable" && lockedOption ? (
           <button type="button" onClick={() => void onGuess(lockedOption)} disabled={guessPending}
-            className="rounded-full bg-foreground py-3 font-semibold text-background">重試答案</button>
+            className="rounded-full bg-foreground py-3 font-semibold text-background">{copy.retryAnswer}</button>
         ) : null}
         {answerFailure === "unavailable" ? (
           <button type="button" onClick={() => void showNext()}
-            className="rounded-full bg-foreground py-3 font-semibold text-background">略過此題</button>
+            className="rounded-full bg-foreground py-3 font-semibold text-background">{copy.skip}</button>
         ) : null}
 
         {status === "empty" ? (
@@ -504,7 +509,7 @@ export default function PlayPage() {
             onClick={() => void showNext()}
             className="h-16 rounded-full bg-foreground text-lg font-medium text-background"
           >
-            再試一次
+            {copy.retry}
           </button>
         ) : null}
 
@@ -520,7 +525,7 @@ export default function PlayPage() {
             <QuestionReportButton
               questionId={question.id}
               label={`🚩 ${t("report")}`}
-              className="text-center text-xs font-medium text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+              className="inline-flex min-h-11 items-center justify-center text-center text-xs font-medium text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
             />
           </>
         ) : null}

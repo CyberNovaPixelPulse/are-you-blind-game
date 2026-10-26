@@ -35,7 +35,7 @@ export function LanguageSwitcher() {
         aria-expanded={open}
         aria-controls={listId}
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex h-10 max-w-[11.5rem] items-center gap-1.5 rounded-full border border-black/10 bg-white px-3 text-sm font-semibold text-zinc-950 shadow-sm transition hover:bg-zinc-50 dark:border-white/15 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
+        className="inline-flex min-h-11 max-w-[11.5rem] items-center gap-1.5 rounded-full border border-black/10 bg-white px-3 text-sm font-semibold text-zinc-950 shadow-sm transition hover:bg-zinc-50 dark:border-white/15 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
       >
         <span aria-hidden="true">{current.flag}</span>
         <span className="truncate">{current.nativeName}</span>

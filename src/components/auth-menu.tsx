@@ -6,6 +6,7 @@ import type { User } from "@supabase/supabase-js";
 import { useLanguage } from "@/components/language-provider";
 import { UserAvatar } from "@/components/user-avatar";
 import { supabase } from "@/lib/supabase";
+import { accountCopyFor } from "@/lib/account-copy";
 
 type Profile = {
   username: string;
@@ -28,8 +29,9 @@ function metadataAvatar(user: User): string | null {
   return typeof url === "string" && url.trim() ? url : null;
 }
 
-export function AuthMenu() {
-  const { t } = useLanguage();
+export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create" }) {
+  const { language } = useLanguage();
+  const account = accountCopyFor(language);
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -99,10 +101,10 @@ export function AuthMenu() {
     setPending(true);
     const { error: signInError } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin },
+      options: { redirectTo: `${window.location.origin}${redirectPath}` },
     });
     if (signInError) {
-      setError("Google 登入失敗，請再試一次");
+      setError(account.text.googleError);
       setPending(false);
     }
   }
@@ -179,14 +181,15 @@ export function AuthMenu() {
           type="button"
           disabled={!ready || pending}
           onClick={signInWithGoogle}
-          className="h-10 rounded-full bg-zinc-950 px-4 text-sm font-semibold text-white shadow-sm disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-950"
+          lang={account.lang}
+          className="min-h-11 rounded-full bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-950"
         >
-          {t("login")}
+          {account.text.google}
         </button>
       )}
       {error && !open ? (
-        <p role="alert" className="text-xs text-red-600 dark:text-red-400">
-          {error}
+        <p role="alert" lang={!user ? account.lang : undefined} className="text-xs text-red-600 dark:text-red-400">
+          {!user ? account.text.googleError : error}
         </p>
       ) : null}
 

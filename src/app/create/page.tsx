@@ -11,6 +11,8 @@ import { isLanguageCode, LANGUAGES, type LanguageCode } from "@/lib/languages";
 import { fillTemplate } from "@/lib/ui-sections";
 import { useLanguage } from "@/components/language-provider";
 import { supabase } from "@/lib/supabase";
+import { AuthMenu } from "@/components/auth-menu";
+import { accountCopyFor } from "@/lib/account-copy";
 import { createBrowserPublication, publicationImage } from "@/lib/publication-browser";
 import { PublicationFailure, type PublicationStatus, type PublicationSnapshot } from "@/lib/publication-flow";
 
@@ -218,6 +220,7 @@ function readableError(error: unknown, copy: CreateQuizCopy): string {
 export default function CreatePage() {
   const { language, t } = useLanguage();
   const copy = t.createQuiz;
+  const account = accountCopyFor(language);
   const [targetOverride, setTargetOverride] = useState<LanguageCode | null>(null);
   const targetLanguage = targetOverride ?? language;
   const [user, setUser] = useState<User | null>(null);
@@ -607,7 +610,7 @@ export default function CreatePage() {
           <Link
             href="/"
             aria-label={copy.backHome}
-            className="inline-flex h-9 w-fit items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] hover:text-zinc-950 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[.08] dark:hover:text-zinc-50"
+            className="inline-flex min-h-11 w-fit items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] hover:text-zinc-950 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[.08] dark:hover:text-zinc-50"
           >
             <span aria-hidden="true">←</span>
             {copy.backHome}
@@ -624,7 +627,7 @@ export default function CreatePage() {
                   const next = event.target.value;
                   if (isLanguageCode(next)) setTargetOverride(next);
                 }}
-                className="h-10 rounded-xl border border-black/10 bg-white px-3 font-medium text-zinc-950 outline-none focus:border-zinc-950 dark:border-white/15 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:border-zinc-50"
+                className="min-h-11 rounded-xl border border-black/10 bg-white px-3 font-medium text-zinc-950 outline-none focus:border-zinc-950 dark:border-white/15 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:border-zinc-50"
               >
                 {LANGUAGES.map((item) => (
                   <option key={item.code} value={item.code}>
@@ -645,7 +648,7 @@ export default function CreatePage() {
               <button
                 type="button"
                 onClick={signOut}
-                className="h-10 rounded-full border border-black/10 px-4 text-sm font-medium transition-colors hover:bg-black/[.04] dark:border-white/15 dark:hover:bg-white/[.08]"
+                className="min-h-11 rounded-full border border-black/10 px-4 text-sm font-medium transition-colors hover:bg-black/[.04] dark:border-white/15 dark:hover:bg-white/[.08]"
               >
                 {copy.signOut}
               </button>
@@ -653,6 +656,8 @@ export default function CreatePage() {
           ) : (
             <form className="flex flex-col gap-3" onSubmit={signIn}>
               <p className="text-sm text-zinc-600 dark:text-zinc-400">{copy.signInHint}</p>
+              <div className="flex justify-start"><AuthMenu redirectPath="/create" /></div>
+              <p lang={account.lang} className="text-sm text-zinc-500">{account.text.emailLogin}</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="flex flex-col gap-1 text-sm font-medium">
                   Email
@@ -681,7 +686,7 @@ export default function CreatePage() {
                 <button
                   type="submit"
                   disabled={!authReady || authPending}
-                  className="h-10 rounded-full bg-foreground px-4 text-sm font-medium text-background disabled:opacity-50"
+                  className="min-h-11 rounded-full bg-foreground px-4 text-sm font-medium text-background disabled:opacity-50"
                 >
                   {t("login")}
                 </button>
@@ -689,11 +694,14 @@ export default function CreatePage() {
                   type="button"
                   disabled={!authReady || authPending}
                   onClick={signUp}
-                  className="h-10 rounded-full border border-black/10 px-4 text-sm font-medium disabled:opacity-50 dark:border-white/15"
+                  className="min-h-11 rounded-full border border-black/10 px-4 text-sm font-medium disabled:opacity-50 dark:border-white/15"
                 >
                   {copy.signUp}
                 </button>
               </div>
+              <Link href="/reset-password" lang={account.lang} className="inline-flex min-h-11 w-fit items-center text-sm font-medium underline underline-offset-4">
+                {account.text.forgot}
+              </Link>
             </form>
           )}
           {authError ? (
@@ -718,7 +726,7 @@ export default function CreatePage() {
               <button
                 type="button"
                 onClick={() => setScoreOpen(true)}
-                className="h-9 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[.08]"
+                className="min-h-11 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[.08]"
               >
                 {copy.viewScore}
               </button>
@@ -757,7 +765,7 @@ export default function CreatePage() {
                 setResult(null);
                 publicationRef.current=null;setPublicationFrozen(false);setPublicationStatus(null);
               }}
-              className="mt-4 h-10 rounded-full bg-foreground px-4 text-sm font-medium text-background"
+              className="mt-4 min-h-11 rounded-full bg-foreground px-4 text-sm font-medium text-background"
             >
               {copy.another}
             </button>
@@ -784,7 +792,7 @@ export default function CreatePage() {
                 <button
                   type="button"
                   onClick={() => setScoreOpen(false)}
-                  className="h-9 rounded-full px-3 text-sm font-medium text-zinc-500 hover:bg-black/[.04] dark:hover:bg-white/[.08]"
+                  className="min-h-11 rounded-full px-3 text-sm font-medium text-zinc-500 hover:bg-black/[.04] dark:hover:bg-white/[.08]"
                 >
                   {copy.close}
                 </button>
