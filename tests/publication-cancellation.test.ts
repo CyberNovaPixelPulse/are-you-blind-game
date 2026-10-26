@@ -45,6 +45,7 @@ test('durable cancellation serializes commit, retries failed cleanup, and protec
       create table question_answer_keys(question_id uuid primary key,original_image_path text);`);
     await a.query(await readFile('supabase/migrations/20261026110107_question_publication_lifecycle.sql','utf8'));
     await a.query(await readFile('supabase/migrations/20261026132427_publication_cancellation_cleanup.sql','utf8'));
+    await a.query(await readFile('supabase/migrations/20261026140058_publication_review_expiry.sql','utf8'));
     await a.query('grant select,insert,update on questions,question_answer_keys to service_role;set role service_role');await b.query('set role service_role');
     await upload(1);
     // Commit wins the held database row lock; cancellation waits then returns published.

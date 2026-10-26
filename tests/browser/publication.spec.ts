@@ -41,6 +41,7 @@ for(const mode of ['success','lost','unknown']) test(`manual publication ${mode}
   if(mode==='unknown'){
     await expect(page.getByRole('status').filter({hasText:'正在確認發布結果'})).toBeVisible();
     await expect(page.getByRole('textbox',{name:'作者名稱',exact:true})).toBeDisabled();
+    await expect(page.getByRole('button',{name:'修改內容並建立新發布',exact:true})).toHaveCount(0);
     queryOnline=true;await page.getByRole('button',{name:'再次確認',exact:true}).click();
   }
   await expect(page.getByRole('status').filter({hasText:'題目已發布'})).toBeVisible();

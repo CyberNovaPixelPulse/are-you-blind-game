@@ -24,8 +24,8 @@ export async function publicationForRequest(request: Request) {
     },
     verify:verifyModerationAttestation,
     images:{
-      put:async (bucket,path,bytes,contentType) => {
-        const {error}=await db.storage.from(bucket).upload(path,bytes,{contentType,upsert:false});
+      put:async (bucket,path,bytes,contentType,overwrite=false) => {
+        const {error}=await db.storage.from(bucket).upload(path,bytes,{contentType,upsert:overwrite});
         if(error) throw new Error('圖片上傳結果尚未確認');
       },
       get:async (bucket,path) => {
@@ -40,6 +40,6 @@ export async function publicationForRequest(request: Request) {
 }
 
 export function publicationError(error: unknown) {
-  if(error instanceof PublicationFailure) return Response.json({state:error.state,message:error.message},{status:409});
+  if(error instanceof PublicationFailure) return Response.json({state:error.state,message:error.message,role:error.role},{status:409});
   return Response.json({state:'unknown',message:'發布結果尚未確認，請再次確認'},{status:503});
 }

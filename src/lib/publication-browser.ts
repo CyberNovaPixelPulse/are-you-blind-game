@@ -12,10 +12,10 @@ export function createBrowserPublication(config: {
       ...(body?{body:JSON.stringify(body)}:{}),cache:'no-store',signal:AbortSignal.timeout(15000)});
     const payload=await response.json();
     if (!response.ok) {
-      if(payload.state==='rejected'||payload.state==='needs-review') throw new PublicationFailure(payload.message,payload.state);
+      if(payload.state==='rejected'||payload.state==='needs-review'||payload.state==='expired'||payload.state==='needs-upload') throw new PublicationFailure(payload.message,payload.state,payload.role);
       throw new Error('發布結果尚未確認');
     }
-    if(!['pending','published','unknown','needs-review','rejected','cancelled'].includes(payload.state)
+    if(!['pending','published','unknown','needs-review','rejected','cancelled','expired','needs-upload'].includes(payload.state)
       || (payload.state==='published' && (payload.result?.id!==config.id || typeof payload.result.quality_score!=='number'))) throw new Error('發布結果格式無效');
     return payload;
   }
@@ -24,6 +24,7 @@ export function createBrowserPublication(config: {
     begin:(id,snapshot)=>request('/api/questions/publication',{id,snapshot}),
     query:id=>request(`/api/questions/publication?id=${encodeURIComponent(id)}`),
     review:config.review,
+    approveReview:(id,snapshot,attestation)=>request('/api/questions/publication',{id,snapshot,attestation,action:'reviewed'}),
     upload:async (role,id)=>{
       const body=new FormData();body.set('questionId',id);body.set('role',role);body.set('file',config[role]);
       const token=await config.getToken();

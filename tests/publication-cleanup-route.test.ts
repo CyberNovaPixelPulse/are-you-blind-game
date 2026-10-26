@@ -10,7 +10,7 @@ test('cleanup worker rejects anonymous requests and consumes its durable queue w
   process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://cleanup-fixture.invalid';
   let calls = 0;
   t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
-    assert(String(input).endsWith('/rest/v1/rpc/publication_cleanup_claim'));
+    assert(/publication_(cleanup_claim|expire_due)$/.test(String(input)));
     calls++;return Response.json({scanned:0,resources:[]});
   });
   const { GET } = await import('../src/app/api/cron/publication-cleanup/route');
@@ -19,5 +19,5 @@ test('cleanup worker rejects anonymous requests and consumes its durable queue w
   const response=await GET(new Request('http://game/api/cron/publication-cleanup',{headers:{Authorization:'Bearer fixture-cron-secret'}}));
   assert.equal(response.status,200);
   assert.deepEqual(await response.json(),{removed:0,failed:0});
-  assert.equal(calls,1);
+  assert.equal(calls,2);
 });

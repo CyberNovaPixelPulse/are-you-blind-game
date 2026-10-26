@@ -8,6 +8,7 @@ export function createPublicationCleanup(config: {
   return {
     async run() {
       const started = Date.now();
+      await config.call('publication_expire_due',{p_limit:250});
       let removed = 0;
       let failed = 0;
       // Bound each invocation; unprocessed resources remain eligible in PostgreSQL.

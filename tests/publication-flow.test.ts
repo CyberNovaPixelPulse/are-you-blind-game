@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createPublicationFlow, type PublicationSnapshot } from '../src/lib/publication-flow';
+import { createPublicationFlow, PublicationFailure, type PublicationSnapshot } from '../src/lib/publication-flow';
 
 export const snapshot: PublicationSnapshot = {
   authorName: '作者', language: 'zh-TW', crop: { sha256: 'a'.repeat(64), contentType: 'image/webp', bytes: 10 },
@@ -14,6 +14,7 @@ test('a lost commit response is confirmed without creating a second publication 
   const flow = createPublicationFlow({
     id: 'publication-one', snapshot,
     gateway: {
+      approveReview:async()=>({state:'pending'}),
       cancel: async () => { throw Error('unexpected cancel'); },
       begin: async () => ({ state: 'pending' }),
       review: async () => 'proof',
@@ -30,6 +31,7 @@ test('a lost commit response is confirmed without creating a second publication 
 
 test('unknown results keep the same publication and lookup never performs another review or upload', async () => {
   const flow=createPublicationFlow({id:'same',snapshot,gateway:{
+    approveReview:async()=>({state:'pending'}),
     cancel: async () => { throw Error('unexpected cancel'); },
     begin:async()=>{throw new Error('offline');},
     query:async()=>{throw new Error('offline');},
@@ -46,6 +48,7 @@ test('a failed upload resumes the fixed content even when the caller edits its d
   let online=false;
   const seenAuthors:string[]=[];
   const flow=createPublicationFlow({id:'same',snapshot:draft,gateway:{
+    approveReview:async()=>({state:'pending'}),
     cancel: async () => { throw Error('unexpected cancel'); },
     begin:async(_id,fixed)=>{seenAuthors.push(fixed.authorName);return {state:'pending'};},
     review:async()=> 'proof',
@@ -67,6 +70,7 @@ test('cancellation stops further uploads and remains terminal even while an uplo
   const uploaded: string[] = [];
   let cancelled = false;
   const flow = createPublicationFlow({ id: 'same', snapshot, gateway: {
+      approveReview:async()=>({state:'pending'}),
     begin: async () => ({ state: 'pending' }), review: async () => 'proof',
     upload: async role => { uploaded.push(role); entered(); await held; return role; },
     commit: async () => { throw Error('must not commit after cancellation'); },
@@ -84,6 +88,7 @@ test('cancellation stops further uploads and remains terminal even while an uplo
 test('cancellation confirms a committed result and never deletes or cancels an already published question', async () => {
   let cancellations = 0;
   const flow = createPublicationFlow({ id: 'same', snapshot, gateway: {
+      approveReview:async()=>({state:'pending'}),
     begin: async () => ({ state: 'pending' }), review: async () => 'proof', upload: async role => role,
     commit: async () => ({ state: 'published', result: { id: 'same', quality_score: 70 } }),
     query: async () => ({ state: 'published', result: { id: 'same', quality_score: 70 } }),
@@ -97,6 +102,7 @@ test('cancellation confirms a committed result and never deletes or cancels an a
 test('an offline cancellation remains unconfirmed and performs no destructive operation', async () => {
   let cancellations = 0;
   const flow = createPublicationFlow({ id: 'same', snapshot, gateway: {
+      approveReview:async()=>({state:'pending'}),
     begin: async () => ({ state: 'pending' }), review: async () => 'proof', upload: async role => role,
     commit: async () => { throw Error('must not commit'); },
     query: async () => { throw Error('offline'); },
@@ -112,6 +118,7 @@ test('a query started before cancellation cannot replace its terminal verdict wi
   const held = new Promise<void>(resolve => { release = resolve; });
   let queries = 0;
   const flow=createPublicationFlow({id:'same',snapshot,gateway:{
+    approveReview:async()=>({state:'pending'}),
     begin:async()=>({state:'pending'}),review:async()=> 'proof',upload:async role=>role,
     commit:async()=>({state:'pending'}),
     query:async()=>{queries++;if(queries===1)await held;return {state:'pending'};},
@@ -121,4 +128,41 @@ test('a query started before cancellation cannot replace its terminal verdict wi
   assert.equal((await flow.cancel()).state,'cancelled');
   release();
   assert.equal((await oldQuery).state,'cancelled');
+});
+
+test('expired review requires explicit re-review, keeps fixed content and reuses complete images', async () => {
+  let reviews=0, commits=0;const uploads:string[]=[];
+  const flow=createPublicationFlow({id:'same',snapshot,gateway:{
+    approveReview:async()=>({state:'pending'}),
+    begin:async()=>({state:'pending'}),query:async()=>({state:'pending'}),cancel:async()=>({state:'cancelled'}),
+    review:async()=>{reviews++;return `proof-${reviews}`;},upload:async role=>{uploads.push(role);return role;},
+    commit:async()=>{commits++;if(commits===1)throw new PublicationFailure('審核已過期','needs-review');return {state:'published',result:{id:'same',quality_score:70}};},
+  }});
+  assert.equal((await flow.run()).state,'needs-review');
+  assert.equal((await flow.run()).state,'needs-review');
+  assert.equal(reviews,1);
+  assert.equal((await flow.rereview()).state,'published');
+  assert.equal(reviews,2);assert.deepEqual(uploads,['crop','original']);
+});
+
+test('a proof-expiry response first confirms already-published success without another review', async () => {
+  let published=false,reviews=0;
+  const flow=createPublicationFlow({id:'same',snapshot,gateway:{
+    begin:async()=>({state:'pending'}),query:async()=>published?{state:'published',result:{id:'same',quality_score:70}}:{state:'pending'},
+    cancel:async()=>({state:'cancelled'}),approveReview:async()=>({state:'pending'}),
+    review:async()=>{reviews++;return 'proof';},upload:async role=>role,
+    commit:async()=>{published=true;throw new PublicationFailure('proof expired','needs-review');},
+  }});
+  assert.equal((await flow.run()).state,'published');assert.equal((await flow.rereview()).state,'published');assert.equal(reviews,1);
+});
+
+test('lost review-registration response retries the same proof instead of buying another review', async () => {
+  let reviews=0,registrations=0;
+  const flow=createPublicationFlow({id:'same',snapshot,gateway:{
+    begin:async()=>({state:'pending'}),query:async()=>({state:'pending'}),cancel:async()=>({state:'cancelled'}),
+    approveReview:async()=>{registrations++;if(registrations===1)throw Error('lost');return {state:'pending'};},
+    review:async()=>{reviews++;return 'proof';},upload:async role=>role,
+    commit:async()=>({state:'published',result:{id:'same',quality_score:70}}),
+  }});
+  assert.equal((await flow.run()).state,'pending');assert.equal((await flow.run()).state,'published');assert.equal(reviews,1);
 });

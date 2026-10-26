@@ -512,12 +512,26 @@ export default function CreatePage() {
     } finally { cancellingRef.current = false; setCancelling(false); }
   }
 
-  async function resumePublication(confirmOnly: boolean) {
+  async function editPublication() {
+    const current=publicationRef.current;
+    if (!current || submittingRef.current) return;
+    submittingRef.current=true;setBusy(true);
+    try {
+      // Close the old identity before unlocking edits; image cleanup is independent.
+      const outcome=await current.flow.cancel();
+      if(publicationRef.current!==current)return;
+      if(outcome.state==="cancelled" || outcome.state==="expired") {
+        publicationRef.current=null;setPublicationFrozen(false);setPublicationStatus(null);setFormError("");
+      } else showPublicationOutcome(outcome);
+    } finally {submittingRef.current=false;setBusy(false);setPhase("idle");}
+  }
+
+  async function resumePublication(confirmOnly: boolean, rereview=false) {
     const current = publicationRef.current;
     if (submittingRef.current || !current) return;
     submittingRef.current = true; setBusy(true);
     try {
-      const outcome = await (confirmOnly ? current.flow.confirm() : current.flow.run());
+      const outcome = await (rereview ? current.flow.rereview() : confirmOnly ? current.flow.confirm() : current.flow.run());
       if (publicationRef.current === current) showPublicationOutcome(outcome);
     } catch { if (publicationRef.current === current) setPublicationStatus({state:"unknown",message:"發布結果尚未確認，請再次確認"}); }
     finally { if (publicationRef.current === current) { submittingRef.current=false;setBusy(false);setPhase("idle"); } }
@@ -829,10 +843,14 @@ export default function CreatePage() {
 
         {publicationStatus ? (
           <section aria-label="發布狀態" className="rounded-2xl border p-4">
-            <p role="status">{publicationStatus.state === "cancelled" ? "已取消，暫存圖片將由系統清理。" : publicationStatus.state === "published" ? "題目已發布" : publicationStatus.state === "unknown" ? "正在確認發布結果" : publicationStatus.message || "本次內容已固定，可繼續這次發布"}</p>
-            {!["published","cancelled"].includes(publicationStatus.state) ? <button type="button" disabled={busy} onClick={()=>void resumePublication(true)}>再次確認</button> : null}
-            {!["published","cancelled"].includes(publicationStatus.state) ? <button type="button" disabled={cancelling} onClick={()=>void cancelPublication()}>取消這次發布</button> : null}
+            <p role="status">{publicationStatus.state === "expired" ? "這次發布已過期，暫存圖片將由系統清理。" : publicationStatus.state === "cancelled" ? "已取消，暫存圖片將由系統清理。" : publicationStatus.state === "published" ? "題目已發布" : publicationStatus.state === "unknown" ? "正在確認發布結果" : publicationStatus.message || "本次內容已固定，可繼續這次發布"}</p>
+            {!["published","cancelled","expired"].includes(publicationStatus.state) ? <button type="button" disabled={busy} onClick={()=>void resumePublication(true)}>再次確認</button> : null}
+            {!["published","cancelled","expired"].includes(publicationStatus.state) ? <button type="button" disabled={cancelling} onClick={()=>void cancelPublication()}>取消這次發布</button> : null}
             {publicationStatus.state === "cancelled" ? <button type="button" onClick={()=>{publicationRef.current=null;setPublicationFrozen(false);setPublicationStatus(null);setPhase("idle");}}>繼續出題</button> : null}
+            {publicationStatus.state === "needs-review" ? <button type="button" disabled={busy || cancelling} onClick={()=>void resumePublication(false,true)}>重新審核並繼續</button> : null}
+            {publicationStatus.state === "needs-upload" ? <button type="button" disabled={busy || cancelling} onClick={()=>void resumePublication(false)}>重新上傳並繼續</button> : null}
+            {!["unknown","published","cancelled","expired"].includes(publicationStatus.state) ? <button type="button" disabled={busy || cancelling} onClick={()=>void editPublication()}>修改內容並建立新發布</button> : null}
+            {publicationStatus.state === "expired" ? <button type="button" disabled={busy} onClick={()=>void editPublication()}>以目前內容建立新發布</button> : null}
             {publicationStatus.state === "pending" ? <button type="button" disabled={busy} onClick={()=>void resumePublication(false)}>繼續這次發布</button> : null}
             {publicationStatus.state === "published" && !result ? <button type="button" onClick={()=>{publicationRef.current=null;setPublicationFrozen(false);setPublicationStatus(null);}}>建立另一題</button> : null}
           </section>

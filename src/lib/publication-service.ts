@@ -29,7 +29,7 @@ export function readPublicationSnapshot(value: unknown): PublicationSnapshot {
 export function createPublicationService(config: {
   owner: string; call: Call;
   images: {
-    put(bucket: string, path: string, bytes: Uint8Array, contentType: string): Promise<void>;
+    put(bucket: string, path: string, bytes: Uint8Array, contentType: string, overwrite?: boolean): Promise<void>;
     get(bucket: string, path: string): Promise<Uint8Array>;
     publicUrl(path: string): string;
   };
@@ -42,20 +42,40 @@ export function createPublicationService(config: {
   const query = async (id: string) => await config.call('publication_query', args(id)) as PublicationStatus;
   const begin = async (id: string, value: PublicationSnapshot) => await config.call('publication_begin', { ...args(id), p_snapshot: readPublicationSnapshot(value) }) as PublicationStatus;
 
+  const verifiedReview = (id: string, snapshot: PublicationSnapshot, proof: unknown) => {
+    const review = config.verify(proof);
+    if (!review || review.expiresAt < Date.now()) throw new PublicationFailure('審核證明無效或已過期，請重新審核','needs-review');
+    const correct = snapshot.options.find(o=>o.is_correct)!;
+    const distractors = snapshot.options.filter(o=>!o.is_correct).map(({text,taunt})=>({text,taunt}));
+    if (review.userId !== config.owner || review.questionId !== id || review.imageSha256 !== snapshot.crop.sha256
+      || review.answer !== correct.text || JSON.stringify(review.distractors) !== JSON.stringify(distractors)) {
+      throw new PublicationFailure('審核與固定內容不同','rejected');
+    }
+    return review;
+  };
   return {
     begin, query,
+    async reviewed(id: string, value: PublicationSnapshot, proof: unknown) {
+      const snapshot=readPublicationSnapshot(value);
+      const previous=await begin(id,snapshot);
+      if(previous.state!=='pending') return previous;
+      const review=verifiedReview(id,snapshot,proof);
+      return await config.call('publication_touch',{...args(id),p_snapshot:snapshot,p_review_expires_at:new Date(review.expiresAt).toISOString()}) as PublicationStatus;
+    },
     cancel: async (id: string, value: PublicationSnapshot) => await config.call('publication_cancel', { ...args(id), p_snapshot: readPublicationSnapshot(value) }) as PublicationStatus,
     async upload(id: string, role: 'crop' | 'original', bytes: Uint8Array, contentType: string) {
       if (!['crop','original'].includes(role) || bytes.length > (role === 'crop' ? 150 : 300)*1024) throw new PublicationFailure('圖片資料無效','rejected');
+      const status = await query(id);
+      if (status.state === 'expired') throw new PublicationFailure('這次發布已過期','expired');
       const sha256 = createHash('sha256').update(bytes).digest('hex');
       // Record intent before storage: a lost storage response is still discoverable.
       const resource = await config.call('publication_upload_intent', { ...args(id), p_role: role, p_sha256: sha256,
         p_content_type: contentType, p_bytes: bytes.length }) as { bucket: string; path: string };
       try { await config.images.put(resource.bucket,resource.path,bytes,contentType); }
       catch {
-        // Deterministic, non-overwriting upload: accept an existing object only if identical.
+        // Reconcile a lost reply; repair corruption only with bytes matching the immutable intent.
         const existing = await config.images.get(resource.bucket,resource.path);
-        if (createHash('sha256').update(existing).digest('hex') !== sha256) throw new PublicationFailure('已上傳圖片與固定內容不同','rejected');
+        if (createHash('sha256').update(existing).digest('hex') !== sha256) await config.images.put(resource.bucket,resource.path,bytes,contentType,true);
       }
       await config.call('publication_upload_complete',{...args(id),p_role:role});
       return resource.path;
@@ -64,25 +84,22 @@ export function createPublicationService(config: {
       const snapshot = readPublicationSnapshot(value);
       const previous = await begin(id,snapshot);
       if (previous.state !== 'pending') return previous;
-      const review = config.verify(proof);
-      if (!review || review.expiresAt < Date.now()) throw new PublicationFailure('審核證明無效或已過期，請重新審核','needs-review');
-      const correct = snapshot.options.find(o=>o.is_correct)!;
-      const distractors = snapshot.options.filter(o=>!o.is_correct).map(({text,taunt})=>({text,taunt}));
-      if (review.userId !== config.owner || review.questionId !== id || review.imageSha256 !== snapshot.crop.sha256
-        || review.answer !== correct.text || JSON.stringify(review.distractors) !== JSON.stringify(distractors)) {
-        throw new PublicationFailure('審核與固定內容不同','rejected');
-      }
+      const review = verifiedReview(id,snapshot,proof);
+      const continued = await config.call('publication_touch',{...args(id),p_snapshot:snapshot,p_review_expires_at:new Date(review.expiresAt).toISOString()}) as PublicationStatus;
+      if (continued.state !== 'pending') return continued;
       const paths = {} as Record<'crop'|'original', string>;
       for (const role of ['crop','original'] as const) {
         const image = snapshot[role];
         const resource = await config.call('publication_upload_intent', { ...args(id), p_role: role, p_sha256:image.sha256,
           p_content_type:image.contentType,p_bytes:image.bytes }) as {bucket:string;path:string};
-        const bytes = await config.images.get(resource.bucket,resource.path);
-        if (bytes.length !== image.bytes || createHash('sha256').update(bytes).digest('hex') !== image.sha256) throw new PublicationFailure('圖片與固定內容不同','rejected');
+        let bytes: Uint8Array;
+        try { bytes = await config.images.get(resource.bucket,resource.path); }
+        catch { throw new PublicationFailure('圖片已缺失，請重新上傳','needs-upload',role); }
+        if (bytes.length !== image.bytes || createHash('sha256').update(bytes).digest('hex') !== image.sha256) throw new PublicationFailure('圖片與固定內容不同，請重新上傳','needs-upload',role);
         paths[role]=resource.path;
         await config.call('publication_upload_complete',{...args(id),p_role:role});
       }
-      return await config.call('publication_commit',{...args(id),p_snapshot:snapshot,p_question:{
+      return await config.call('publication_commit',{...args(id),p_snapshot:snapshot,p_review_expires_at:new Date(review.expiresAt).toISOString(),p_question:{
         crop_image_path:config.images.publicUrl(paths.crop),original_image_path:paths.original,
         quality_score:review.qualityScore,score_breakdown:review.scoreBreakdown,
         options:snapshot.options.map((o,i)=>({...o,id:i+1})),

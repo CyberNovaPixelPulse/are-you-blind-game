@@ -1,0 +1,196 @@
+begin;
+alter table public.question_publications drop constraint question_publications_state_check;
+alter table public.question_publications add constraint question_publications_state_check check(state in ('pending','published','cancelled','expired'));
+alter table public.question_publications alter column snapshot drop not null;
+alter table public.question_publication_images alter column sha256 drop not null;
+create index publication_pending_expiry on public.question_publications(last_active_at,id) where state='pending';
+
+create or replace function public.publication_query(p_owner uuid,p_id uuid) returns jsonb
+language plpgsql security invoker set search_path=public as $$
+declare a public.question_publications;
+begin
+  select * into a from public.question_publications where id=p_id for update;
+  if not found then return jsonb_build_object('state','pending'); end if;
+  if a.owner_id<>p_owner then raise insufficient_privilege; end if;
+  if a.state='pending' and a.last_active_at+interval '24 hours'<=clock_timestamp() then
+    update public.question_publications set state='expired',snapshot=null where id=p_id;
+    update public.question_publication_images set sha256=null,cleanup_pending=true,cleanup_due_at=now(),cleanup_last_claimed_at=null where publication_id=p_id;
+    a.state:='expired';
+  end if;
+  return jsonb_build_object('state',a.state,'result',a.result,'expiresAt',case when a.state='pending' then a.last_active_at+interval '24 hours' else null end,
+    'cleanupPending',a.state in ('expired','cancelled') and exists(select 1 from public.question_publication_images where publication_id=p_id and cleanup_pending));
+end $$;
+
+-- Called only after the server validates a matching, unexpired moderation proof.
+create function public.publication_touch(p_owner uuid,p_id uuid,p_snapshot jsonb,p_review_expires_at timestamptz default null) returns jsonb
+language plpgsql security invoker set search_path=public as $$
+declare status jsonb; a public.question_publications;
+begin
+  status:=public.publication_query(p_owner,p_id);
+  if status->>'state'<>'pending' then return status; end if;
+  if p_review_expires_at is null or p_review_expires_at<=clock_timestamp() then return jsonb_build_object('state','needs-review','message','審核已過期，請明確重新審核'); end if;
+  select * into strict a from public.question_publications where id=p_id for update;
+  if a.snapshot<>p_snapshot then raise invalid_parameter_value; end if;
+  update public.question_publications set last_active_at=clock_timestamp() where id=p_id;
+  return public.publication_query(p_owner,p_id);
+end $$;
+
+create function public.publication_expire_due(p_limit integer default 250) returns integer
+language plpgsql security invoker set search_path=public as $$
+declare a record; total integer:=0;
+begin
+  for a in select id,owner_id from public.question_publications where state='pending' and last_active_at+interval '24 hours'<=clock_timestamp()
+    order by last_active_at,id limit least(greatest(p_limit,1),250) for update skip locked
+  loop
+    perform public.publication_query(a.owner_id,a.id);
+    total:=total+1;
+  end loop;
+  return total;
+end $$;
+
+create or replace function public.publication_begin(p_owner uuid,p_id uuid,p_snapshot jsonb) returns jsonb
+language plpgsql security invoker set search_path = public as $$
+declare a public.question_publications; status jsonb;
+begin
+  insert into public.question_publications(id,owner_id,snapshot) values(p_id,p_owner,p_snapshot) on conflict(id) do nothing;
+  status := public.publication_query(p_owner,p_id);
+  if status->>'state'='expired' then return status; end if;
+  select * into a from public.question_publications where id=p_id for update;
+  if a.owner_id <> p_owner then raise insufficient_privilege using message='publication owner mismatch'; end if;
+  if a.snapshot <> p_snapshot then raise invalid_parameter_value using message='publication content mismatch'; end if;
+  return jsonb_build_object('state',a.state,'result',a.result);
+end $$;
+
+create or replace function public.publication_cancel(p_owner uuid,p_id uuid,p_snapshot jsonb) returns jsonb
+language plpgsql security invoker set search_path = public as $$
+declare a public.question_publications; status jsonb;
+begin
+  -- A cancellation that beats even begin creates a durable tombstone.
+  insert into public.question_publications(id,owner_id,snapshot,state) values(p_id,p_owner,p_snapshot,'cancelled') on conflict(id) do nothing;
+  status := public.publication_query(p_owner,p_id);
+  if status->>'state'='expired' then return status; end if;
+  select * into strict a from public.question_publications where id=p_id for update;
+  if a.owner_id <> p_owner then raise insufficient_privilege; end if;
+  if a.snapshot <> p_snapshot then raise invalid_parameter_value; end if;
+  if a.state='published' then return public.publication_query(p_owner,p_id); end if;
+  update public.question_publications set state='cancelled' where id=p_id;
+  update public.question_publication_images set cleanup_due_at=now() where publication_id=p_id;
+  return public.publication_query(p_owner,p_id);
+end $$;
+
+create or replace function public.publication_upload_intent(p_owner uuid,p_id uuid,p_role text,p_sha256 text,p_content_type text,p_bytes integer) returns jsonb
+language plpgsql security invoker set search_path = public as $$
+declare a public.question_publications; bucket_name text; object_name text; ext text; status jsonb;
+begin
+  status := public.publication_query(p_owner,p_id);
+  if status->>'state'='expired' then raise sqlstate '55000' using message='publication expired'; end if;
+  select * into strict a from public.question_publications where id=p_id for update;
+  if a.owner_id <> p_owner then raise insufficient_privilege using message='publication owner mismatch'; end if;
+  if a.state='cancelled' then raise sqlstate '55000' using message='publication cancelled'; end if;
+  if p_role not in ('crop','original') or a.snapshot->p_role->>'sha256' is distinct from p_sha256
+    or a.snapshot->p_role->>'contentType' is distinct from p_content_type
+    or (a.snapshot->p_role->>'bytes')::integer is distinct from p_bytes then
+    raise invalid_parameter_value using message='publication image mismatch';
+  end if;
+  if a.state = 'published' then
+    return (select jsonb_build_object('bucket',bucket,'path',object_path) from public.question_publication_images where publication_id=p_id and role=p_role);
+  end if;
+  ext := case p_content_type when 'image/webp' then 'webp' when 'image/png' then 'png' when 'image/jpeg' then 'jpg' end;
+  if ext is null then raise invalid_parameter_value using message='unsupported image'; end if;
+  bucket_name := case p_role when 'crop' then 'quiz-images' else 'quiz-originals' end;
+  object_name := p_owner::text||'/'||p_id::text||'/'||p_role||'.'||ext;
+  insert into public.question_publication_images(publication_id,role,bucket,object_path,sha256)
+    values(p_id,p_role,bucket_name,object_name,p_sha256) on conflict(publication_id,role) do nothing;
+  return jsonb_build_object('bucket',bucket_name,'path',object_name);
+end $$;
+
+create or replace function public.publication_upload_complete(p_owner uuid,p_id uuid,p_role text) returns jsonb
+language plpgsql security invoker set search_path = public as $$
+declare a public.question_publications; status jsonb;
+begin
+  status := public.publication_query(p_owner,p_id);
+  if status->>'state' in ('expired','cancelled','published') then return status; end if;
+  select * into a from public.question_publications where id=p_id and owner_id=p_owner for update;
+  if not found then raise insufficient_privilege; end if;
+  if a.state='cancelled' then return public.publication_query(p_owner,p_id); end if;
+  update public.question_publication_images set available=true where publication_id=p_id and role=p_role;
+  if not found then raise invalid_parameter_value using message='unknown publication image'; end if;
+  update public.question_publications set last_active_at=clock_timestamp() where id=p_id;
+  return jsonb_build_object('state','pending');
+end $$;
+
+drop function public.publication_commit(uuid,uuid,jsonb,jsonb);
+create function public.publication_commit(p_owner uuid,p_id uuid,p_snapshot jsonb,p_question jsonb,p_review_expires_at timestamptz default null) returns jsonb
+language plpgsql security invoker set search_path = public as $$
+declare a public.question_publications; completed integer; answer jsonb; status jsonb;
+begin
+  status := public.publication_query(p_owner,p_id);
+  if status->>'state'='expired' then return status; end if;
+  select * into strict a from public.question_publications where id=p_id for update;
+  if a.owner_id <> p_owner then raise insufficient_privilege; end if;
+  if a.snapshot <> p_snapshot then raise invalid_parameter_value using message='publication content mismatch'; end if;
+  if a.state='cancelled' then return public.publication_query(p_owner,p_id); end if;
+  if a.state='published' then return jsonb_build_object('state','published','result',a.result); end if;
+  if p_review_expires_at is null or p_review_expires_at<=clock_timestamp() then return jsonb_build_object('state','needs-review','message','審核已過期，請明確重新審核'); end if;
+  select count(*) into completed from public.question_publication_images where publication_id=p_id and available;
+  if completed <> 2 then raise invalid_parameter_value using message='publication images incomplete'; end if;
+  insert into public.questions(id,crop_image_path,original_image_path,author_id,author_name,difficulty,status,language,quality_score,score_breakdown,options)
+    values(p_id,p_question->>'crop_image_path',p_question->>'original_image_path',p_owner,p_snapshot->>'authorName','normal','active',p_snapshot->>'language',
+      (p_question->>'quality_score')::integer,p_question->'score_breakdown',p_question->'options');
+  answer := jsonb_build_object('id',p_id,'quality_score',(p_question->>'quality_score')::integer);
+  update public.question_publications set state='published',result=answer,last_active_at=now() where id=p_id;
+  return jsonb_build_object('state','published','result',answer);
+end $$;
+
+create or replace function public.publication_guard_image_reference() returns trigger
+language plpgsql security invoker set search_path = public as $$
+declare p record; previous jsonb;
+begin
+  previous := case when tg_op='UPDATE' then to_jsonb(old) else '{}'::jsonb end;
+  if tg_op='UPDATE' and to_jsonb(new)->>'crop_image_path' is not distinct from previous->>'crop_image_path'
+    and to_jsonb(new)->>'original_image_path' is not distinct from previous->>'original_image_path'
+    and to_jsonb(new)->>'original_image_url' is not distinct from previous->>'original_image_url' then return new; end if;
+  for p in select a.id,a.state from public.question_publications a join public.question_publication_images i on i.publication_id=a.id
+    where (to_jsonb(new)->>'crop_image_path' is distinct from previous->>'crop_image_path' and public.publication_path_matches(to_jsonb(new)->>'crop_image_path',i.bucket,i.object_path))
+       or (to_jsonb(new)->>'original_image_path' is distinct from previous->>'original_image_path' and public.publication_path_matches(to_jsonb(new)->>'original_image_path',i.bucket,i.object_path))
+       or (to_jsonb(new)->>'original_image_url' is distinct from previous->>'original_image_url' and public.publication_path_matches(to_jsonb(new)->>'original_image_url',i.bucket,i.object_path))
+    order by a.id for update of a
+  loop
+    if p.state in ('cancelled','expired') then raise sqlstate '55000' using message='cancelled publication images cannot acquire new references'; end if;
+  end loop;
+  return new;
+end $$;
+
+create or replace function public.publication_cleanup_claim(p_limit integer default 50) returns jsonb
+language plpgsql security invoker set search_path = public as $$
+declare resource record; resources jsonb := '[]'::jsonb; scanned integer := 0;
+begin
+  for resource in select i.* from public.question_publication_images i join public.question_publications a on a.id=i.publication_id
+    where a.state in ('cancelled','expired') and i.cleanup_due_at<=now()
+    order by i.cleanup_pending desc,i.cleanup_last_claimed_at nulls first,i.cleanup_due_at,i.publication_id,i.role
+    limit least(greatest(p_limit,1),50) for update of a,i skip locked
+  loop
+    scanned := scanned + 1;
+    update public.question_publication_images set cleanup_due_at=now()+interval '5 minutes',cleanup_last_claimed_at=now()
+      where publication_id=resource.publication_id and role=resource.role;
+    if public.publication_image_referenced(resource.bucket,resource.object_path) then
+      update public.question_publication_images set cleanup_pending=true,cleanup_due_at=now()+interval '24 hours' where publication_id=resource.publication_id and role=resource.role;
+      continue;
+    end if;
+    resources := resources || jsonb_build_array(jsonb_build_object('publicationId',resource.publication_id,'bucket',resource.bucket,'path',resource.object_path));
+  end loop;
+  return jsonb_build_object('resources',resources,'scanned',scanned);
+end $$;
+
+create or replace function public.publication_cleanup_complete(p_id uuid,p_bucket text,p_path text,p_success boolean) returns void
+language plpgsql security invoker set search_path = public as $$
+begin
+  -- Keep manifests for repeated sweeps: an upload accepted before cancellation may arrive late.
+  update public.question_publication_images i set cleanup_pending=not p_success,
+    cleanup_due_at=now()+case when p_success then interval '24 hours' else interval '5 minutes' end
+    where i.publication_id=p_id and i.bucket=p_bucket and i.object_path=p_path
+      and exists(select 1 from public.question_publications a where a.id=p_id and a.state in ('cancelled','expired'));
+end $$;
+revoke all on function public.publication_touch(uuid,uuid,jsonb,timestamptz),public.publication_commit(uuid,uuid,jsonb,jsonb,timestamptz),public.publication_expire_due(integer) from public,anon,authenticated;
+grant execute on function public.publication_touch(uuid,uuid,jsonb,timestamptz),public.publication_commit(uuid,uuid,jsonb,jsonb,timestamptz),public.publication_expire_due(integer) to service_role;
+commit;
