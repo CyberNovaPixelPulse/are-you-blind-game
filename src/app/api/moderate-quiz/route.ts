@@ -1,4 +1,8 @@
 import OpenAI from "openai";
+import { createHash } from "node:crypto";
+import { consumeAiRateLimit, guardAuthenticatedAiRequest, readJsonLimited } from "@/lib/api-protection";
+import { hasAdminSession } from "@/lib/admin-access";
+import { issueModerationAttestation } from "@/lib/moderation-attestation";
 
 type Distractor = {
   text: string;
@@ -300,28 +304,59 @@ async function readImage(body: {
 }
 
 export async function POST(request: Request) {
+  const guard = await guardAuthenticatedAiRequest(request, { perMinute: 2, perHour: 10 });
+  if (!guard.ok) {
+    let isLocalAdmin = false;
+    if (guard.status === 401 && process.env.NODE_ENV === "development") {
+      try {
+        isLocalAdmin = await hasAdminSession();
+      } catch {
+        isLocalAdmin = false;
+      }
+    }
+    if (!isLocalAdmin) {
+      return Response.json({ message: guard.message }, {
+        status: guard.status,
+        headers: guard.status === 429 ? { "Retry-After": "60" } : undefined,
+      });
+    }
+    const rate = await consumeAiRateLimit(request, "local-admin", { perMinute: 2, perHour: 10 });
+    if (!rate.ok) {
+      return Response.json({ message: rate.message }, {
+        status: rate.status,
+        headers: rate.status === 429 ? { "Retry-After": "60" } : undefined,
+      });
+    }
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return Response.json({ message: "尚未設定 OPENAI_API_KEY" }, { status: 500 });
   }
 
+  if (Number(request.headers.get("content-length") ?? 0) > 240_000) {
+    return Response.json({ message: "圖片或請求太大" }, { status: 413 });
+  }
+
   let correctAnswer = "";
+  let questionId = "";
   let distractors: Distractor[] | null = null;
   let image: { mime: string; base64: string } | null = null;
-  try {
-    const body = (await request.json()) as {
+  const body = await readJsonLimited<{
+      questionId?: unknown;
       correctAnswer?: unknown;
       distractors?: unknown;
       imageBase64?: unknown;
       mimeType?: unknown;
       imagePath?: unknown;
-    };
-    correctAnswer = typeof body.correctAnswer === "string" ? body.correctAnswer.trim() : "";
-    distractors = readDistractors(body.distractors, correctAnswer);
-    image = await readImage(body);
-  } catch {
+    }>(request, 240_000);
+  if (!body) {
     return Response.json({ message: "請提供特寫圖片、正解與干擾項" }, { status: 400 });
   }
+  questionId = typeof body.questionId === "string" ? body.questionId : "";
+  correctAnswer = typeof body.correctAnswer === "string" ? body.correctAnswer.trim() : "";
+  distractors = readDistractors(body.distractors, correctAnswer);
+  image = await readImage(body);
 
   if (correctAnswer.length < 1 || correctAnswer.length > 120) {
     return Response.json({ message: "正解名稱需要 1 到 120 個字" }, { status: 400 });
@@ -387,7 +422,19 @@ export async function POST(request: Request) {
       console.error("moderate-quiz score invalid", (scoreContent ?? "").slice(0, 500));
       return Response.json({ message: "預審回傳的格式不正確" }, { status: 502 });
     }
-    return Response.json(result);
+    let attestation: string | undefined;
+    if (result.passed && guard.ok && /^[0-9a-f-]{36}$/i.test(questionId)) {
+      attestation = issueModerationAttestation({
+        userId: guard.userId,
+        questionId,
+        answer: correctAnswer,
+        distractors,
+        imageSha256: createHash("sha256").update(Buffer.from(image.base64, "base64")).digest("hex"),
+        qualityScore: result.quality_score,
+        scoreBreakdown: result.score_breakdown,
+      });
+    }
+    return Response.json({ ...result, ...(attestation ? { attestation } : {}) });
   } catch (error) {
     const message = describeError(error);
     console.error("moderate-quiz", message);

@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Area, Point } from "react-easy-crop";
 import type { User } from "@supabase/supabase-js";
-import { cropToFile, compressCloseupToWebp, compressOriginalImage, cropToAiJpegBase64, imageFileMeta } from "@/lib/image";
+import { cropToFile, compressCloseupToWebp, compressOriginalImage, cropToAiJpegBase64 } from "@/lib/image";
 import type { CreateQuizCopy } from "@/lib/create-copy";
 import { isLanguageCode, LANGUAGES, type LanguageCode } from "@/lib/languages";
 import { fillTemplate } from "@/lib/ui-sections";
 import { useLanguage } from "@/components/language-provider";
 import { supabase } from "@/lib/supabase";
+import { createBrowserPublication, publicationImage } from "@/lib/publication-browser";
+import { PublicationFailure, type PublicationStatus, type PublicationSnapshot } from "@/lib/publication-flow";
 
 const Cropper = dynamic(() => import("react-easy-crop"), { ssr: false });
 
@@ -114,28 +116,6 @@ async function postAiOptions(correctAnswer: string, language: string, imageBase6
   return { ok: response.ok, payload };
 }
 
-async function uploadQuizImage(
-  accessToken: string,
-  questionId: string,
-  role: "crop" | "original",
-  file: File,
-) {
-  const meta = imageFileMeta(file, role);
-  const body = new FormData();
-  body.set("questionId", questionId);
-  body.set("role", role);
-  body.set("file", file, meta.filename);
-  const response = await fetch("/api/quiz-images", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body,
-  });
-  const payload = (await response.json()) as { message?: string; objectPath?: string; publicUrl?: string };
-  if (!response.ok || !payload.objectPath || !payload.publicUrl) {
-    throw new Error(payload.message || "圖片上傳失敗");
-  }
-  return { objectPath: payload.objectPath, publicUrl: payload.publicUrl };
-}
 
 async function fileToBase64(file: File) {
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -258,10 +238,15 @@ export default function CreatePage() {
   const [options, setOptions] = useState<OptionDraft[]>(emptyOptions);
   const [correctIndex, setCorrectIndex] = useState(0);
   const [phase, setPhase] = useState<
-    "idle" | "compressing" | "moderating" | "uploading" | "saving"
+    "idle" | "compressing" | "moderating" | "uploading" | "saving" | "confirming"
   >("idle");
   const [busy, setBusy] = useState(false);
   const submittingRef = useRef(false);
+  const publicationRef = useRef<{
+    flow: ReturnType<typeof createBrowserPublication>; crop: File; original: File; authorName: string; review?: ModerationReport;
+  } | null>(null);
+  const [publicationStatus, setPublicationStatus] = useState<PublicationStatus | null>(null);
+  const [publicationFrozen, setPublicationFrozen] = useState(false);
   const [formError, setFormError] = useState("");
   const [moderationReport, setModerationReport] = useState<ModerationReport | null>(null);
   const [aiPending, setAiPending] = useState(false);
@@ -488,145 +473,82 @@ export default function CreatePage() {
     return null;
   }
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
+  function showPublicationOutcome(outcome: PublicationStatus) {
+    setPublicationStatus(outcome);
+    const current = publicationRef.current;
+    if (outcome.state !== "published" || !current) return;
+    // The server result is final even if local preview preparation fails.
     setFormError("");
-    setModerationReport(null);
-
-    const validationError = validate();
-    if (validationError) {
-      setFormError(validationError);
-      return;
+    writeStoredAuthorName(current.authorName);
+    authorTouched.current = true;
+    setScoreOpen(false);
+    if (current.review) {
+      try {
+        setResult({cropUrl: URL.createObjectURL(current.crop), originalUrl: URL.createObjectURL(current.original),
+          cropBytes:current.crop.size,originalBytes:current.original.size,
+          qualityScore:outcome.result!.quality_score,breakdown:current.review.breakdown});
+      } catch { /* The published status remains visible without a local preview. */ }
     }
-    if (!sourceFile || !imageUrl || !croppedAreaPixels) return;
-    if (submittingRef.current) return;
-    submittingRef.current = true;
-
-    const uploaded: string[] = [];
-    let questionId = "";
-    let saved = false;
-
-    try {
-      setBusy(true);
-      const {
-        data: { user: currentUser },
-        error: userError,
-      } = await supabase.auth.getUser();
-      if (userError || !currentUser) {
-        setFormError(copy.needLogin);
-        return;
-      }
-
-      setPhase("compressing");
-
-      const cropped = await cropToFile(imageUrl, croppedAreaPixels);
-      const cropFile = await compressCloseupToWebp(cropped);
-      const cropMeta = imageFileMeta(cropFile, "crop");
-
-      setPhase("moderating");
-      const correctAnswer = options[correctIndex]?.optionText.trim() ?? "";
-      const moderationResponse = await fetch("/api/moderate-quiz", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          correctAnswer,
-          distractors: options
-            .filter((_, index) => index !== correctIndex)
-            .map((option) => ({
-              text: option.optionText.trim(),
-              taunt: option.tauntText.trim(),
-            })),
-          imageBase64: await fileToBase64(cropFile),
-          mimeType: cropMeta.contentType,
-        }),
-      });
-      const moderation = (await moderationResponse.json()) as {
-        message?: string;
-        passed?: boolean;
-        quality_score?: number;
-        score_breakdown?: ScoreBreakdown;
-        guesses?: string[];
-        suggestion?: string;
-      };
-      const review = readReview(moderation);
-      if (!moderationResponse.ok || !review) {
-        throw new Error(moderation.message || copy.reviewFail);
-      }
-      if (!moderation.passed || review.qualityScore < 60 || review.breakdown.safety.violated) {
-        setModerationReport(review);
-        return;
-      }
-
-      const originalFile = await compressOriginalImage(sourceFile);
-
-      questionId = crypto.randomUUID();
-      const session = await supabase.auth.getSession();
-      const accessToken = session.data.session?.access_token;
-      if (!accessToken) throw new Error(copy.needLogin);
-
-      setPhase("uploading");
-      const cropUpload = await uploadQuizImage(accessToken, questionId, "crop", cropFile);
-      uploaded.push(cropUpload.objectPath);
-      const originalUpload = await uploadQuizImage(accessToken, questionId, "original", originalFile);
-      uploaded.push(originalUpload.objectPath);
-
-      setPhase("saving");
-      const questionInsert = await supabase.from("questions").insert({
-        id: questionId,
-        crop_image_path: cropUpload.publicUrl,
-        original_image_path: originalUpload.publicUrl,
-        author_id: currentUser.id,
-        author_name: authorName.trim(),
-        difficulty: "normal",
-        status: "active",
-        language: targetLanguage,
-        quality_score: review.qualityScore,
-        score_breakdown: review.breakdown,
-        options: options.map((option, index) => ({
-          id: index + 1,
-          text: option.optionText.trim(),
-          is_correct: index === correctIndex,
-          taunt: option.tauntText.trim(),
-        })),
-      });
-      if (questionInsert.error) throw new Error(questionInsert.error.message);
-
-      saved = true;
-      const publishedName = authorName.trim();
-      writeStoredAuthorName(publishedName);
-      authorTouched.current = true;
-      setScoreOpen(false);
-      setResult({
-        cropUrl: URL.createObjectURL(cropFile),
-        originalUrl: URL.createObjectURL(originalFile),
-        cropBytes: cropFile.size,
-        originalBytes: originalFile.size,
-        qualityScore: review.qualityScore,
-        breakdown: review.breakdown,
-      });
-      setSourceFile(null);
-      setImageUrl(null);
-      setCroppedAreaPixels(null);
-      setOptions(emptyOptions());
-      setCorrectIndex(0);
-    } catch (error) {
-      if (!saved) {
-        if (uploaded.length > 0) {
-          await supabase.storage.from("quiz-images").remove(uploaded);
-        }
-        if (questionId) {
-          await supabase.from("questions").delete().eq("id", questionId);
-        }
-      }
-      setFormError(readableError(error, copy));
-    } finally {
-      submittingRef.current = false;
-      setBusy(false);
-      setPhase("idle");
-    }
+    setSourceFile(null); setImageUrl(null); setCroppedAreaPixels(null);
+    setOptions(emptyOptions()); setCorrectIndex(0);
   }
 
-  const pending = busy;
+  async function resumePublication(confirmOnly: boolean) {
+    if (submittingRef.current || !publicationRef.current) return;
+    submittingRef.current = true; setBusy(true);
+    try { showPublicationOutcome(await (confirmOnly ? publicationRef.current.flow.confirm() : publicationRef.current.flow.run())); }
+    catch { setPublicationStatus({state:"unknown",message:"發布結果尚未確認，請再次確認"}); }
+    finally { submittingRef.current=false;setBusy(false);setPhase("idle"); }
+  }
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (publicationRef.current) { await resumePublication(false); return; }
+    setFormError(""); setModerationReport(null);
+    const validationError=validate();
+    if(validationError){setFormError(validationError);return;}
+    if(!sourceFile || !imageUrl || !croppedAreaPixels || submittingRef.current) return;
+    const draft={authorName:authorName.trim(),language:targetLanguage,cropArea:{...croppedAreaPixels},
+      options:options.map((option,index)=>({text:option.optionText.trim(),is_correct:index===correctIndex,taunt:option.tauntText.trim()}))};
+    submittingRef.current=true;setBusy(true);
+    try {
+      const getToken=async()=>{
+        const session=await supabase.auth.getSession();
+        const token=session.data.session?.access_token;
+        if(!token) throw new Error(copy.needLogin);
+        return token;
+      };
+      await getToken();
+      setPhase("compressing");
+      const crop=await compressCloseupToWebp(await cropToFile(imageUrl,draft.cropArea));
+      const original=await compressOriginalImage(sourceFile);
+      const snapshot:PublicationSnapshot={...draft,crop:await publicationImage(crop),original:await publicationImage(original)};
+      const id=crypto.randomUUID();
+      const flow=createBrowserPublication({id,snapshot,crop,original,getToken,onPhase:setPhase,
+        review:async (questionId,fixed)=>{
+          const correct=fixed.options.find(o=>o.is_correct)!;
+          const response=await fetch("/api/moderate-quiz",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${await getToken()}`},
+            body:JSON.stringify({questionId,correctAnswer:correct.text,distractors:fixed.options.filter(o=>!o.is_correct).map(({text,taunt})=>({text,taunt})),
+              imageBase64:await fileToBase64(crop),mimeType:crop.type})});
+          const moderation=await response.json() as {message?:string;passed?:boolean;attestation?:string;quality_score?:number;score_breakdown?:ScoreBreakdown;guesses?:string[];suggestion?:string};
+          const review=readReview(moderation);
+          if(!response.ok || !review) throw new Error(moderation.message || copy.reviewFail);
+          if(!moderation.passed || review.qualityScore<60 || review.breakdown.safety.violated){
+            setModerationReport(review);throw new PublicationFailure(copy.reviewFail,"rejected");
+          }
+          if(!moderation.attestation) throw new PublicationFailure("審核證明無效，請重新審核","needs-review");
+          if(publicationRef.current) publicationRef.current.review=review;
+          return moderation.attestation;
+        }});
+      publicationRef.current={flow,crop,original,authorName:draft.authorName};
+      setTargetOverride(draft.language);
+      setPublicationFrozen(true);
+      showPublicationOutcome(await flow.run());
+    } catch(error) {setFormError(readableError(error,copy));}
+    finally {submittingRef.current=false;setBusy(false);setPhase("idle");}
+  }
+
+  const pending = busy || publicationFrozen;
   const phaseLabel =
     phase === "compressing"
       ? copy.compressing
@@ -656,6 +578,7 @@ export default function CreatePage() {
             <label className="flex flex-wrap items-center gap-2 text-sm font-medium text-zinc-500">
               {copy.quizLanguage}
               <select
+                disabled={busy || publicationFrozen}
                 value={targetLanguage}
                 onChange={(event) => {
                   const next = event.target.value;
@@ -792,6 +715,7 @@ export default function CreatePage() {
               onClick={() => {
                 setScoreOpen(false);
                 setResult(null);
+                publicationRef.current=null;setPublicationFrozen(false);setPublicationStatus(null);
               }}
               className="mt-4 h-10 rounded-full bg-foreground px-4 text-sm font-medium text-background"
             >
@@ -877,7 +801,18 @@ export default function CreatePage() {
           </div>
         ) : null}
 
+        {publicationStatus ? (
+          <section aria-label="發布狀態" className="rounded-2xl border p-4">
+            <p role="status">{publicationStatus.state === "published" ? "題目已發布" : publicationStatus.state === "unknown" ? "正在確認發布結果" : publicationStatus.message || "本次內容已固定，可繼續這次發布"}</p>
+            {publicationStatus.state !== "published" ? <button type="button" disabled={busy} onClick={()=>void resumePublication(true)}>再次確認</button> : null}
+            {publicationStatus.state === "pending" ? <button type="button" disabled={busy} onClick={()=>void resumePublication(false)}>繼續這次發布</button> : null}
+            {publicationStatus.state === "rejected" ? <button type="button" disabled={busy} onClick={()=>{publicationRef.current=null;setPublicationFrozen(false);setPublicationStatus(null);}}>重新編輯</button> : null}
+            {publicationStatus.state === "published" && !result ? <button type="button" onClick={()=>{publicationRef.current=null;setPublicationFrozen(false);setPublicationStatus(null);}}>建立另一題</button> : null}
+          </section>
+        ) : null}
+        {phase === "confirming" ? <p role="status">正在確認發布結果</p> : null}
         <form className="flex flex-col gap-8" onSubmit={onSubmit}>
+        <fieldset disabled={pending} className="flex min-w-0 flex-col gap-8">
           <label className="flex flex-col gap-2 text-sm font-medium">
             {copy.authorLabel}
             <input
@@ -1037,6 +972,7 @@ export default function CreatePage() {
           >
             {phaseLabel}
           </button>
+        </fieldset>
         </form>
       </main>
       {moderationReport ? (
