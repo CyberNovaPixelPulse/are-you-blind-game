@@ -143,14 +143,3 @@ export function commitDraw(result: DrawResult) {
   if (result.resetSeen) writeSeenIds(result.keepIds);
   if (result.question) rememberSeen(result.question.id);
 }
-
-export async function recordAnsweredQuestion(questionId: string) {
-  rememberSeen(questionId);
-  const session = await supabase.auth.getSession();
-  const userId = session.data.session?.user?.id;
-  if (!userId) return;
-  await supabase.from("user_question_answers").insert({
-    user_id: userId,
-    question_id: questionId,
-  });
-}

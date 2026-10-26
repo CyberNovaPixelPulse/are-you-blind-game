@@ -6,12 +6,13 @@ import { AdModal, usePlayerVip } from "@/components/ad-modal";
 import { SiteFooter } from "@/components/site-footer";
 import { QuestionReportButton, TAUNT_MEME_COUNT, TauntDialog } from "@/components/taunt-meme";
 import { useLanguage } from "@/components/language-provider";
-import { drawQuestions, recordAnsweredQuestion, type DrawnQuestion } from "@/lib/draw-question";
+import { drawQuestions, type DrawnQuestion } from "@/lib/draw-question";
 import { quizImageUrl } from "@/lib/quiz-image";
 import { recordQuestionView } from "@/lib/question-views";
 import { readStoredOptions, type QuizOption } from "@/lib/question-options";
 import { readSeenIds, rememberSeen, writeSeenIds } from "@/lib/seen-questions";
 import { createAnswerRoundtrip, requestAnswer } from "@/lib/answer-roundtrip";
+import { useAnsweredHistory } from "@/lib/use-answered-history";
 import { createQuestionPool } from "@/lib/question-pool";
 
 type Question = DrawnQuestion;
@@ -131,6 +132,7 @@ async function celebrateMilestone() {
 
 export default function PlayPage() {
   const { language, t } = useLanguage();
+  const { captureAnswered, unsyncedCount } = useAnsweredHistory();
   const [question, setQuestion] = useState<Question | null>(null);
   const [options, setOptions] = useState<QuizOption[]>([]);
   const [guesses, setGuesses] = useState<Record<string, Guess>>({});
@@ -139,7 +141,7 @@ export default function PlayPage() {
   const [lockedOption, setLockedOption] = useState<QuizOption | null>(null);
   const [answerFailure, setAnswerFailure] = useState<"retryable" | "unavailable" | null>(null);
   const presentationRef = useRef(0);
-  const submissionRef = useRef<{ optionId: string; retryable: boolean } | null>(null);
+  const submissionRef = useRef<{ optionId: string; retryable: boolean; record: (id: string) => void } | null>(null);
   useEffect(() => () => { presentationRef.current++; answerFlow.invalidate(); }, [answerFlow]);
   const [correctOptionId, setCorrectOptionId] = useState<string | null>(null);
   const [revealedAnswer, setRevealedAnswer] = useState("");
@@ -317,7 +319,8 @@ export default function PlayPage() {
 
     const submission = submissionRef.current;
     if (submission && (!submission.retryable || submission.optionId !== option.id)) return;
-    submissionRef.current = { optionId: option.id, retryable: false };
+    const record = submission?.record ?? captureAnswered();
+    submissionRef.current = { optionId: option.id, retryable: false, record };
     const presentation = presentationRef.current;
     setLockedOption(option);
     setGuessPending(true);
@@ -327,14 +330,14 @@ export default function PlayPage() {
     if (presentationRef.current !== presentation || outcome.kind === "ignored") return;
     setGuessPending(false);
     if (outcome.kind !== "verdict") {
-      submissionRef.current = { optionId: option.id, retryable: outcome.kind === "retryable" };
+      submissionRef.current = { optionId: option.id, retryable: outcome.kind === "retryable", record };
       setAnswerFailure(outcome.kind);
       setErrorMessage(outcome.message);
       return;
     }
     const result = outcome.verdict;
     // Persistence cannot revoke adoption or trigger another grading request.
-    void recordAnsweredQuestion(question.id).catch(() => {});
+    record(question.id);
     const guess = { isCorrect: result.isCorrect, tauntText: result.tauntText || option.tauntText };
     setRevealedAnswer(result.answerText || options.find(item => item.id === result.correctOptionId)?.text || "");
     setRevealedOriginalUrl(result.originalImageUrl || "");
@@ -375,6 +378,7 @@ export default function PlayPage() {
         </div>
         <StreakFlame streak={streak} label={t("streak", { n: streak })} />
       </header>
+      {unsyncedCount > 0 ? <p role="status" className="text-sm text-amber-700">已作答紀錄尚未同步，遊戲結果已保留。</p> : null}
       {thinLanguage ? (
         <p className="mb-2 shrink-0 rounded-2xl border border-amber-300/50 bg-amber-50 px-3 py-1 text-xs text-amber-900 dark:border-amber-300/30 dark:bg-amber-950/40 dark:text-amber-100">
           {t("thinPool")}

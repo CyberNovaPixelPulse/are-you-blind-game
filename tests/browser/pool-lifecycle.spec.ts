@@ -151,8 +151,8 @@ test('failed challenge verdict restores the remaining time and allows an answer 
   await page.getByRole('button', { name: '開始挑戰', exact: true }).click();
   await expect(page.locator('header')).toContainText('1s', { timeout: 12000 });
   await page.getByRole('button', { name: '正確選項', exact: true }).click();
-  await expect(page.getByText('判定暫時失敗', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '正確選項', exact: true }).click();
+  await expect(page.getByRole('button', { name: '重試答案', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '重試答案', exact: true }).click();
   await expect(page.locator('header')).toContainText('🔥 1');
   await expect(page.getByRole('dialog', { name: '最終結算' })).toBeHidden();
 });

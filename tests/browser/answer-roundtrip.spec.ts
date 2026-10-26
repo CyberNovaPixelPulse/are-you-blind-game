@@ -51,7 +51,7 @@ test('adopted verdict survives history failure, while failed grading never write
   let requests = 0;
   await page.route('**/rest/v1/user_question_answers*', async route => {
     writes++;
-    await route.fulfill({ status: 400, json: { message: 'fixture storage failure' } });
+    await route.fulfill({ status: 503, json: { message: 'fixture storage failure' } });
   });
   await page.route('**/api/questions/answer', async route => {
     requests++;
@@ -66,7 +66,11 @@ test('adopted verdict survives history failure, while failed grading never write
   await page.getByRole('button', { name: '重試答案', exact: true }).click();
   await expect(page.getByText('連勝 1', { exact: false })).toBeVisible();
   await expect.poll(() => writes).toBe(1);
-  await expect(page.getByRole('button', { name: '下一題', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '下一題', exact: true }).click();
+  await expect.poll(() => writes).toBe(3);
+  await expect(page.getByRole('status').filter({ hasText: '已作答紀錄尚未同步' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '正確選項', exact: true })).toBeEnabled();
+  await expect(page.getByText('連勝 1', { exact: false })).toBeVisible();
   expect(requests).toBe(2);
 });
 
@@ -89,4 +93,35 @@ test('same-task clicks cannot replace the answer used by an explicit retry', asy
   await page.getByRole('button', { name: '重試答案', exact: true }).click();
   await expect(page.getByText('連勝 1', { exact: false })).toBeVisible();
   expect(submitted).toEqual(['correct', 'correct']);
+});
+
+test('a verdict submitted by one account is not recorded to an account signed in while waiting', async ({ page }) => {
+  await installFixtures(page);
+  await page.addInitScript(() => localStorage.setItem('sb-127-auth-token', JSON.stringify({ access_token: 'fixture-token', refresh_token: 'fixture-refresh', expires_at: 4102444800, token_type: 'bearer', user: { id: '00000000-0000-0000-0000-000000000099', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' } })));
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  let entered!: () => void;
+  const requested = new Promise<void>(resolve => { entered = resolve; });
+  const writers: string[] = [];
+  await page.route('**/rest/v1/user_question_answers*', async route => { writers.push(route.request().postDataJSON().user_id); await route.fulfill({ status: 204 }); });
+  await page.route('**/api/questions/answer', async route => {
+    const body = route.request().postDataJSON(); entered(); await held;
+    await route.fulfill({ json: { ...body, correctOptionId: 'correct', isCorrect: true } });
+  });
+  await page.goto('/play');
+  await page.getByRole('button', { name: '正確選項', exact: true }).click();
+  await requested;
+  // Same cross-tab auth boundary used by the Supabase browser client.
+  await page.evaluate(async () => {
+    const session = JSON.parse(localStorage.getItem('sb-127-auth-token')!);
+    session.user.id = '00000000-0000-0000-0000-000000000088';
+    localStorage.setItem('sb-127-auth-token', JSON.stringify(session));
+    const channel = new BroadcastChannel('sb-127-auth-token');
+    channel.postMessage({ event: 'SIGNED_IN', session });
+    await new Promise(resolve => setTimeout(resolve, 100));
+    channel.close();
+  });
+  release();
+  await expect(page.getByText('連勝 1', { exact: false })).toBeVisible();
+  expect(writers).toEqual([]);
 });

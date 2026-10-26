@@ -9,13 +9,15 @@ import { SiteFooter } from "@/components/site-footer";
 import type { User } from "@supabase/supabase-js";
 import { HonorCard } from "@/components/honor-card";
 import { useLanguage } from "@/components/language-provider";
-import { drawQuestions, recordAnsweredQuestion, type DrawnQuestion } from "@/lib/draw-question";
+import { drawQuestions, type DrawnQuestion } from "@/lib/draw-question";
 import { recordQuestionView } from "@/lib/question-views";
 import { getMyRank } from "@/lib/leaderboard";
 import { readStoredOptions, type QuizOption } from "@/lib/question-options";
 import { quizImageUrl } from "@/lib/quiz-image";
 import { readSeenIds, rememberSeen, writeSeenIds } from "@/lib/seen-questions";
 import { supabase } from "@/lib/supabase";
+import { createAnswerRoundtrip, requestAnswer } from "@/lib/answer-roundtrip";
+import { useAnsweredHistory } from "@/lib/use-answered-history";
 import { createQuestionPool } from "@/lib/question-pool";
 
 const ROUND_MS = 10_000;
@@ -41,7 +43,7 @@ type QueuedQuestion = {
 
 type PoolOutcome = "ok" | "empty" | "error" | "idle";
 
-type EndReason = "wrong" | "timeout" | "clear";
+type EndReason = "wrong" | "timeout" | "clear" | "interrupted";
 type SaveState = "idle" | "guest" | "saved" | "error";
 type ShameCard = {
   cropUrl: string;
@@ -150,6 +152,12 @@ async function playerIdentity(user: User) {
 export default function ChallengePage() {
   const { language, t } = useLanguage();
   const router = useRouter();
+  const { captureAnswered, unsyncedCount } = useAnsweredHistory();
+  const [answerFlow] = useState(() => createAnswerRoundtrip({ request: requestAnswer }));
+  const firstSubmissionRef = useRef<{ option: QuizOption; remaining: number; record: (id: string) => void } | null>(null);
+  const [answerRetry, setAnswerRetry] = useState(false);
+  const [answerLocked, setAnswerLocked] = useState(false);
+  useEffect(() => () => answerFlow.invalidate(), [answerFlow]);
   const { isVip, vipReady } = usePlayerVip();
   const [phase, setPhase] = useState<"idle" | "play" | "over">("idle");
   const [question, setQuestion] = useState<Question | null>(null);
@@ -182,7 +190,6 @@ export default function ChallengePage() {
   const phaseRef = useRef(phase);
   const endedRef = useRef(false);
   const answerPendingRef = useRef(false);
-  const answerEpochRef = useRef(0);
   const lockRef = useRef(false);
   const scoreRef = useRef(0);
   const streakRef = useRef(0);
@@ -288,8 +295,16 @@ export default function ChallengePage() {
     endedRef.current = true;
     phaseRef.current = "over";
     lockRef.current = true;
+    answerFlow.invalidate();
+    answerPendingRef.current = false;
     setEndReason(reason);
     setPhase("over");
+    if (reason === "interrupted") {
+      setShame(null);
+      setSaveState("idle");
+      sessionStorage.removeItem(PENDING_KEY);
+      return;
+    }
     const shot = roundShot.current;
     if (shot?.cropUrl) {
       setShame({
@@ -335,6 +350,11 @@ export default function ChallengePage() {
   }
 
   function present(item: QueuedQuestion, thin: boolean) {
+    answerFlow.present({ id: item.question.id, optionIds: item.options.map(option => option.id) });
+    firstSubmissionRef.current = null;
+    setAnswerRetry(false);
+    setAnswerLocked(false);
+    answerPendingRef.current = false;
     lockRef.current = false;
     clockArmedRef.current = null;
     deadlineRef.current = 0;
@@ -373,6 +393,7 @@ export default function ChallengePage() {
   }
 
   async function loadNext() {
+    answerFlow.invalidate();
     const gen = poolGenRef.current;
     lockRef.current = true;
     clockArmedRef.current = null;
@@ -389,7 +410,10 @@ export default function ChallengePage() {
   }
 
   function start() {
-    answerEpochRef.current += 1;
+    answerFlow.invalidate();
+    firstSubmissionRef.current = null;
+    setAnswerRetry(false);
+    setAnswerLocked(false);
     answerPendingRef.current = false;
     sessionStorage.removeItem(PENDING_KEY);
     endedRef.current = false;
@@ -421,40 +445,35 @@ export default function ChallengePage() {
       finish("timeout");
       return;
     }
+    const first = firstSubmissionRef.current;
+    if (first && first.option.id !== option.id) return;
+    firstSubmissionRef.current ??= { option, remaining, record: captureAnswered() };
+    const scoringRemaining = firstSubmissionRef.current.remaining;
+    const record = firstSubmissionRef.current.record;
     lockRef.current = true;
+    setAnswerLocked(true);
+    setAnswerRetry(false);
+    setNotice("");
     const currentId = questionRef.current.id;
-    const epoch = ++answerEpochRef.current;
     answerPendingRef.current = true;
     setRemainingMs(remaining);
-    void recordAnsweredQuestion(currentId);
-    let response: Response;
-    try {
-      response = await fetch("/api/questions/answer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ questionId: currentId, optionId: option.id }),
-        signal: AbortSignal.timeout(10_000),
-      });
-    } catch {
-      if (epoch !== answerEpochRef.current || endedRef.current) return;
-      answerPendingRef.current = false;
-      deadlineRef.current = performance.now() + remaining;
-      lockRef.current = false;
-      setNotice("判定答案時發生連線錯誤，請再試一次。");
-      return;
-    }
-    const result = (await response.json().catch(() => null)) as {
-      isCorrect?: boolean; tauntText?: string; answerText?: string; error?: string;
-    } | null;
-    if (epoch !== answerEpochRef.current || endedRef.current) return;
+    const outcome = await answerFlow.submit(option.id);
+    if (outcome.kind === "ignored" || endedRef.current) return;
     answerPendingRef.current = false;
-    if (!response.ok || typeof result?.isCorrect !== "boolean") {
-      deadlineRef.current = performance.now() + remaining;
-      lockRef.current = false;
-      setNotice(result?.error || "判定答案時發生錯誤，請再試一次。");
+    if (outcome.kind === "unavailable") {
+      setNotice(outcome.message);
+      finish("interrupted");
       return;
     }
-    if (endedRef.current) return;
+    if (outcome.kind !== "verdict") {
+      deadlineRef.current = performance.now() + remaining;
+      lockRef.current = false;
+      setAnswerRetry(true);
+      setNotice(outcome.message);
+      return;
+    }
+    const result = outcome.verdict;
+    record(currentId);
     if (roundShot.current && typeof result.answerText === "string") {
       roundShot.current.answerText = result.answerText;
     }
@@ -462,7 +481,7 @@ export default function ChallengePage() {
       finish("wrong", { text: option.text, taunt: result.tauntText || option.tauntText });
       return;
     }
-    const gained = scoreForRemaining(remaining);
+    const gained = scoreForRemaining(scoringRemaining);
     const nextScore = scoreRef.current + gained;
     const nextStreak = streakRef.current + 1;
     scoreRef.current = nextScore;
@@ -473,6 +492,7 @@ export default function ChallengePage() {
   }
 
   function runLeave(action: "restart" | "home") {
+    answerFlow.invalidate();
     if (action === "home") {
       router.push("/");
       return;
@@ -586,6 +606,7 @@ export default function ChallengePage() {
         />
       </div>
 
+      {unsyncedCount > 0 ? <p role="status">已作答紀錄尚未同步，遊戲結果已保留。</p> : null}
       {thinLanguage && phase === "play" ? <p className="mb-2 text-xs text-amber-700 dark:text-amber-300">{t("thinPool")}</p> : null}
       {notice ? <p className="mb-3 text-sm text-emerald-700 dark:text-emerald-300">{notice}</p> : null}
 
@@ -651,13 +672,17 @@ export default function ChallengePage() {
                     key={option.id}
                     type="button"
                     onClick={() => onGuess(option)}
-                    disabled={!clockRunning}
+                    disabled={!clockRunning || answerLocked}
                     className="rounded-2xl border border-black/10 bg-white px-4 py-3 text-left text-base font-medium disabled:opacity-60 dark:border-white/15 dark:bg-zinc-950"
                   >
                     {option.text}
                   </button>
                 ))
               : null}
+            {answerRetry && firstSubmissionRef.current ? (
+              <button type="button" onClick={() => void onGuess(firstSubmissionRef.current!.option)}
+                className="h-14 rounded-full bg-zinc-950 text-white dark:bg-zinc-50 dark:text-zinc-950">重試答案</button>
+            ) : null}
             {status === "error" ? (
               <button
                 type="button"
@@ -693,12 +718,12 @@ export default function ChallengePage() {
               {endReason === "timeout" ? "時間到" : endReason === "clear" ? "題庫清空" : "挑戰結束"}
             </p>
             <h2 id="challenge-result-title" className="mt-1 text-2xl font-black">
-              最終結算
+              {endReason === "interrupted" ? "本次挑戰中斷" : "最終結算"}
             </h2>
             <p className="mt-4 text-4xl font-black tracking-tight">{score.toLocaleString("zh-TW")}</p>
             <p className="text-sm text-zinc-500">挑戰總分</p>
             <p className="mt-4 text-xl font-bold">連續答對 {streak} 題</p>
-            <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{reviewText(streak, endReason)}</p>
+            <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{endReason === "interrupted" ? "本次成績不會提交排行榜。" : reviewText(streak, endReason)}</p>
             {rank ? <p className="mt-3 text-sm font-semibold">目前排行第 {rank} 名</p> : null}
             {saveState === "saved" ? (
               <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">已寫入排行榜</p>
@@ -738,13 +763,13 @@ export default function ChallengePage() {
               >
                 完整天梯榜 ➔
               </button>
-              <button
+              {endReason !== "interrupted" ? <button
                 type="button"
                 onClick={() => leaveChallenge("restart")}
                 className="h-12 rounded-full bg-zinc-950 text-base font-bold text-white dark:bg-zinc-50 dark:text-zinc-950"
               >
                 再挑戰一次
-              </button>
+              </button> : null}
               <button
                 type="button"
                 onClick={() => leaveChallenge("home")}

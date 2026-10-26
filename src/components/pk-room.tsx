@@ -26,6 +26,9 @@ import { recordQuestionView } from "@/lib/question-views";
 import { UserAvatar } from "@/components/user-avatar";
 import { supabase } from "@/lib/supabase";
 
+import { createAnswerRoundtrip, requestAnswer } from "@/lib/answer-roundtrip";
+import { useAnsweredHistory } from "@/lib/use-answered-history";
+
 const ROOM_COLUMNS = "*";
 
 type BattleQuestion = {
@@ -136,6 +139,14 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
   const [questions, setQuestions] = useState<BattleQuestion[]>([]);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [pickedId, setPickedId] = useState<string | null>(null);
+  const [correctOptionId, setCorrectOptionId] = useState<string | null>(null);
+  const { captureAnswered, unsyncedCount } = useAnsweredHistory();
+  const [answerFlow] = useState(() => createAnswerRoundtrip({ request: requestAnswer }));
+  const submissionRef = useRef<{ option: QuizOption; retryable: boolean; record: (id: string) => void } | null>(null);
+  const leavingRef = useRef(false);
+  useEffect(() => { leavingRef.current = false; }, [code]);
+  const [answerFailure, setAnswerFailure] = useState<"retryable" | "unavailable" | null>(null);
+  const [answerLocked, setAnswerLocked] = useState(false);
   const [addingBot, setAddingBot] = useState(false);
   const [localProgress, setLocalProgress] = useState({ question: 0, score: 0 });
   const [botProgress, setBotProgress] = useState<Record<string, { question: number; score: number }>>({});
@@ -314,7 +325,24 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
     };
   }, [room?.id, room?.status, room?.question_ids.join("|")]);
 
+  const countLeft = room?.started_at ? countdownNumber(room.started_at, now) : null;
+  const inBattle = room?.status === "playing" && countLeft === 0;
   const current = questions[questionIndex] ?? null;
+  const answerScope = `${code}:${room?.id}:${user?.id}:${questionIndex}:${current?.id}:${inBattle}:${phase}`;
+  const answerScopeRef = useRef(answerScope);
+  answerScopeRef.current = answerScope;
+  useEffect(() => {
+    submissionRef.current = null;
+    setAnswerLocked(false);
+    setAnswerFailure(null);
+    setPickedId(null);
+    setCorrectOptionId(null);
+    if (current && inBattle && phase === "room" && room?.room_code === code && room.question_ids.includes(current.id)) {
+      answerFlow.present({ id: current.id, optionIds: current.options.map(option => option.id) });
+    } else answerFlow.invalidate();
+    return () => answerFlow.invalidate();
+  }, [answerScope, answerFlow]);
+  useEffect(() => () => { answerScopeRef.current = ""; answerFlow.invalidate(); }, [answerFlow]);
   useEffect(() => {
     if (!current || viewed.current.has(current.id)) return;
     viewed.current.add(current.id);
@@ -323,7 +351,7 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
 
   useEffect(() => {
     shownAt.current = Date.now();
-  }, [current?.id]);
+  }, [answerScope]);
 
   useEffect(() => {
     alive.current = true;
@@ -333,6 +361,7 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
   }, []);
 
   useEffect(() => {
+    setQuestionIndex(0);
     setLocalProgress({ question: 0, score: 0 });
     setBotProgress({});
     botRuns.current = new Set();
@@ -366,14 +395,15 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
   }
 
   async function leaveRoom() {
+    leavingRef.current = true;
+    answerScopeRef.current = "";
+    answerFlow.invalidate();
     if (user && room && room.status === "waiting") {
       await supabase.from("pk_participants").delete().eq("room_id", room.id).eq("user_id", user.id);
     }
     router.push("/pk");
   }
 
-  const countLeft = room?.started_at ? countdownNumber(room.started_at, now) : null;
-  const inBattle = room?.status === "playing" && countLeft === 0;
   const host = Boolean(user && room && room.host_id === user.id);
   const canStart = Boolean(room && room.mode === "private" && host && room.status === "waiting" && players.length >= 2);
   const rosterKey = players.map((player) => `${player.user_id}:${player.is_bot ? 1 : 0}`).join("|");
@@ -460,24 +490,48 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
     };
   }, [inBattle, host, room?.id, room?.question_ids.length, rosterKey]);
 
-  function answer(option: QuizOption) {
-    if (!current || pickedId || !user || !room) return;
-    const gained = pkAnswerScore(Date.now() - shownAt.current, option.isCorrect);
+  async function answer(option: QuizOption) {
+    if (leavingRef.current || !current || pickedId || !user || !room || room.room_code !== code || !inBattle) return;
+    const submission = submissionRef.current;
+    if (submission && (!submission.retryable || submission.option.id !== option.id)) return;
+    const record = submission?.record ?? captureAnswered();
+    submissionRef.current = { option, retryable: false, record };
+    const scope = answerScope;
+    const presentedAt = shownAt.current;
+    setAnswerLocked(true);
+    setAnswerFailure(null);
+    setNotice("");
+    const outcome = await answerFlow.submit(option.id);
+    if (leavingRef.current || outcome.kind === "ignored" || answerScopeRef.current !== scope) return;
+    if (outcome.kind !== "verdict") {
+      submissionRef.current = { option, retryable: outcome.kind === "retryable", record };
+      setAnswerFailure(outcome.kind);
+      setNotice(outcome.message);
+      return;
+    }
+    const result = outcome.verdict;
+    const gained = pkAnswerScore(Math.max(0, outcome.submittedAt - presentedAt), result.isCorrect);
     const nextQuestion = questionIndex + 1;
     const nextScore = localProgress.score + gained;
+    record(current.id);
     setLocalProgress({ question: nextQuestion, score: nextScore });
+    setCorrectOptionId(result.correctOptionId);
     setPickedId(option.id);
-    void saveMyPkScore(room.id, user.id, nextQuestion, nextScore);
+    void saveMyPkScore(room.id, user.id, nextQuestion, nextScore).catch(() => {
+      if (answerScopeRef.current === scope) setNotice("對戰進度尚未同步，這題結果已保留。");
+    });
   }
 
   useEffect(() => {
     if (!pickedId) return;
+    const scope = answerScope;
     const timer = window.setTimeout(() => {
+      if (leavingRef.current || answerScopeRef.current !== scope) return;
       setPickedId(null);
       setQuestionIndex((index) => index + 1);
     }, 600);
     return () => window.clearTimeout(timer);
-  }, [pickedId]);
+  }, [pickedId, answerScope]);
 
   async function addVirtualPlayer() {
     if (!room || !user || addingBot) return;
@@ -508,6 +562,14 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
           : "mx-auto flex min-h-screen w-full max-w-md flex-col gap-6 px-4 py-8"
       }
     >
+      {unsyncedCount > 0 ? <p role="status">已作答紀錄尚未同步，遊戲結果已保留。</p> : null}
+      {notice && inBattle ? <p role="alert" className="text-sm text-amber-700">{notice}</p> : null}
+      {answerFailure === "retryable" && submissionRef.current ? (
+        <button type="button" onClick={() => void answer(submissionRef.current!.option)} className="rounded-full bg-rose-500 p-3 text-white">重試答案</button>
+      ) : null}
+      {answerFailure === "unavailable" ? (
+        <button type="button" onClick={() => void leaveRoom()} className="rounded-full bg-rose-500 p-3 text-white">離開房間</button>
+      ) : null}
       <div className="flex shrink-0 items-center justify-between gap-3">
         <button
           type="button"
@@ -646,7 +708,7 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
                 {current.options.map((option) => {
                   const selected = pickedId === option.id;
                   const revealed = pickedId !== null;
-                  const tone = revealed && option.isCorrect
+                  const tone = revealed && option.id === correctOptionId
                     ? "border-emerald-500 bg-emerald-500 text-white"
                     : revealed && selected
                       ? "animate-quiz-shake border-red-500 bg-red-500 text-white"
@@ -655,7 +717,7 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
                     <button
                       key={option.id}
                       type="button"
-                      disabled={revealed}
+                      disabled={revealed || answerLocked}
                       onClick={() => answer(option)}
                       className={`rounded-2xl border px-4 py-3 text-left text-base font-medium ${tone}`}
                     >
