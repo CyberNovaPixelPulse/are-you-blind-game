@@ -17,7 +17,7 @@ test('ordinary play records only presented questions, cycles, and resumes after 
       const input = route.request().postDataJSON();
       await route.fulfill({ json: pickQuestions(questions, input.seenIds, [], input.avoidId, input.reservedIds, input.count) });
     } else if (url.pathname === '/api/questions/answer') {
-      await route.fulfill({ json: { isCorrect: true, answerText: '正確選項', originalImageUrl: '/fixture-original.png' } });
+      await route.fulfill({ json: { questionId: route.request().postDataJSON().questionId, optionId: 'correct', correctOptionId: 'correct', isCorrect: true, answerText: '正確選項', originalImageUrl: '/fixture-original.png' } });
     } else if (url.pathname === '/api/questions/view') {
       await route.fulfill({ json: { ok: true } });
     } else if (url.pathname.includes('fixture-')) {

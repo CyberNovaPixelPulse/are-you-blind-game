@@ -31,9 +31,11 @@ export async function POST(request: Request) {
   ]);
   if (question.error) return Response.json({ error: "答題服務暫時無法使用" }, { status: 503 });
   if (!question.data || !Array.isArray(question.data.options)) {
-    return Response.json({ error: "題目不存在" }, { status: 404 });
+    return Response.json({ code: "question_unavailable", error: "題目不存在" }, { status: 404 });
   }
-  const options = question.data.options as { id?: unknown; text?: unknown; is_correct?: unknown; taunt?: unknown }[];
+  const options = question.data.options.filter((value: unknown) => value && typeof value === "object") as {
+    id?: unknown; text?: unknown; is_correct?: unknown; taunt?: unknown;
+  }[];
   const missingAnswerTable = key.error?.code === "42P01" || key.error?.code === "PGRST205";
   if (key.error && !missingAnswerTable) return Response.json({ error: "答題服務暫時無法使用" }, { status: 503 });
   const legacyCorrect = options.find((value) => value.is_correct === true);
@@ -42,7 +44,11 @@ export async function POST(request: Request) {
   const option = question.data.options.find((value: unknown) =>
     value && typeof value === "object" && String((value as { id?: unknown }).id) === String(body.optionId),
   ) as { id?: unknown; taunt?: unknown } | undefined;
-  if (!option) return Response.json({ error: "這個選項不屬於題目" }, { status: 400 });
+  if (!option) return Response.json({ code: "question_unavailable", error: "這個選項不屬於題目" }, { status: 400 });
+
+  if (!correctOptionId || !options.some(value => String(value.id) === String(correctOptionId))) {
+    return Response.json({ code: "question_unavailable", error: "此題缺少有效正解" }, { status: 409 });
+  }
 
   let originalImageUrl = "";
   if (key.data?.original_image_path) {
@@ -50,13 +56,20 @@ export async function POST(request: Request) {
     if (/^https:\/\//i.test(path)) {
       originalImageUrl = path;
     } else {
-      const signed = await db.storage.from("quiz-originals").createSignedUrl(path, 300);
-      if (!signed.error) originalImageUrl = signed.data.signedUrl;
+      try {
+        const signed = await db.storage.from("quiz-originals").createSignedUrl(path, 300);
+        if (!signed.error) originalImageUrl = signed.data.signedUrl;
+      } catch {
+        // Original-image availability must not invalidate an otherwise valid verdict.
+      }
     }
   }
 
   return Response.json({
-    isCorrect: Boolean(correctOptionId) && String(option.id) === correctOptionId,
+    questionId: body.questionId,
+    optionId: String(option.id),
+    correctOptionId: String(correctOptionId),
+    isCorrect: Boolean(correctOptionId) && String(option.id) === String(correctOptionId),
     tauntText: typeof option.taunt === "string" ? option.taunt : "",
     answerText,
     originalImageUrl,

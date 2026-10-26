@@ -11,6 +11,7 @@ import { quizImageUrl } from "@/lib/quiz-image";
 import { recordQuestionView } from "@/lib/question-views";
 import { readStoredOptions, type QuizOption } from "@/lib/question-options";
 import { readSeenIds, rememberSeen, writeSeenIds } from "@/lib/seen-questions";
+import { createAnswerRoundtrip, requestAnswer } from "@/lib/answer-roundtrip";
 import { createQuestionPool } from "@/lib/question-pool";
 
 type Question = DrawnQuestion;
@@ -134,6 +135,12 @@ export default function PlayPage() {
   const [options, setOptions] = useState<QuizOption[]>([]);
   const [guesses, setGuesses] = useState<Record<string, Guess>>({});
   const [guessPending, setGuessPending] = useState(false);
+  const [answerFlow] = useState(() => createAnswerRoundtrip({ request: requestAnswer }));
+  const [lockedOption, setLockedOption] = useState<QuizOption | null>(null);
+  const [answerFailure, setAnswerFailure] = useState<"retryable" | "unavailable" | null>(null);
+  const presentationRef = useRef(0);
+  const submissionRef = useRef<{ optionId: string; retryable: boolean } | null>(null);
+  useEffect(() => () => { presentationRef.current++; answerFlow.invalidate(); }, [answerFlow]);
   const [correctOptionId, setCorrectOptionId] = useState<string | null>(null);
   const [revealedAnswer, setRevealedAnswer] = useState("");
   const [revealedOriginalUrl, setRevealedOriginalUrl] = useState("");
@@ -178,6 +185,10 @@ export default function PlayPage() {
   }
 
   function present(item: QueuedQuestion & { id: string }) {
+    answerFlow.present({ id: item.id, optionIds: item.options.map(option => option.id) });
+    submissionRef.current = null;
+    setLockedOption(null);
+    setAnswerFailure(null);
     setTauntOpen(false);
     setMiss(null);
     setSolved(false);
@@ -198,6 +209,12 @@ export default function PlayPage() {
   }
 
   async function showNext() {
+    presentationRef.current++;
+    answerFlow.invalidate();
+    submissionRef.current = null;
+    setLockedOption(null);
+    setAnswerFailure(null);
+    setGuessPending(false);
     const gen = drawGenRef.current;
     setTauntOpen(false);
     setMiss(null);
@@ -298,33 +315,30 @@ export default function PlayPage() {
   async function onGuess(option: QuizOption) {
     if (!question || solved || miss || guessPending) return;
 
+    const submission = submissionRef.current;
+    if (submission && (!submission.retryable || submission.optionId !== option.id)) return;
+    submissionRef.current = { optionId: option.id, retryable: false };
+    const presentation = presentationRef.current;
+    setLockedOption(option);
     setGuessPending(true);
-    void recordAnsweredQuestion(question.id);
+    setAnswerFailure(null);
     setErrorMessage("");
-    let response: Response;
-    try {
-      response = await fetch("/api/questions/answer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ questionId: question.id, optionId: option.id }),
-      });
-    } catch {
-      setGuessPending(false);
-      setErrorMessage("判定答案時發生連線錯誤，請再試一次。");
-      return;
-    }
-    const result = (await response.json().catch(() => null)) as {
-      isCorrect?: boolean; tauntText?: string; answerText?: string; originalImageUrl?: string; error?: string;
-    } | null;
+    const outcome = await answerFlow.submit(option.id);
+    if (presentationRef.current !== presentation || outcome.kind === "ignored") return;
     setGuessPending(false);
-    if (!response.ok || typeof result?.isCorrect !== "boolean") {
-      setErrorMessage(result?.error || "判定答案時發生錯誤，請再試一次。");
+    if (outcome.kind !== "verdict") {
+      submissionRef.current = { optionId: option.id, retryable: outcome.kind === "retryable" };
+      setAnswerFailure(outcome.kind);
+      setErrorMessage(outcome.message);
       return;
     }
+    const result = outcome.verdict;
+    // Persistence cannot revoke adoption or trigger another grading request.
+    void recordAnsweredQuestion(question.id).catch(() => {});
     const guess = { isCorrect: result.isCorrect, tauntText: result.tauntText || option.tauntText };
-    setRevealedAnswer(result.answerText || "");
+    setRevealedAnswer(result.answerText || options.find(item => item.id === result.correctOptionId)?.text || "");
     setRevealedOriginalUrl(result.originalImageUrl || "");
-    setCorrectOptionId(options.find((item) => item.text === result.answerText)?.id ?? null);
+    setCorrectOptionId(result.correctOptionId);
     setGuesses((current) => ({ ...current, [option.id]: guess }));
     if (guess.isCorrect) {
       const nextStreak = streak + 1;
@@ -342,7 +356,7 @@ export default function PlayPage() {
   }
 
   const authorName = question?.author_name ?? "";
-  const showOriginal = solved || miss !== null;
+  const showOriginal = (solved || miss !== null) && Boolean(revealedOriginalUrl);
   const answerText = revealedAnswer || options.find((option) => option.isCorrect)?.text || "";
 
   return (
@@ -399,6 +413,7 @@ export default function PlayPage() {
               key={showOriginal ? "original" : "crop"}
               src={showOriginal ? revealedOriginalUrl : publicImageUrl(question.crop_image_path)}
               alt={showOriginal ? "揭曉原圖" : "這題的特寫"}
+              onError={() => { if (showOriginal) setRevealedOriginalUrl(""); }}
               className={
                 showOriginal
                   ? "absolute inset-0 h-full w-full object-cover animate-quiz-reveal"
@@ -431,7 +446,7 @@ export default function PlayPage() {
                 <button
                   key={option.id}
                   type="button"
-                  disabled={solved || miss !== null || guessPending}
+                  disabled={solved || miss !== null || guessPending || lockedOption !== null}
                   onClick={() => onGuess(option)}
                   className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-base font-medium ${
                     pickedWrong
@@ -459,6 +474,15 @@ export default function PlayPage() {
           <p role="alert" className="text-sm text-red-600 dark:text-red-400">
             {errorMessage}
           </p>
+        ) : null}
+
+        {answerFailure === "retryable" && lockedOption ? (
+          <button type="button" onClick={() => void onGuess(lockedOption)} disabled={guessPending}
+            className="rounded-full bg-foreground py-3 font-semibold text-background">重試答案</button>
+        ) : null}
+        {answerFailure === "unavailable" ? (
+          <button type="button" onClick={() => void showNext()}
+            className="rounded-full bg-foreground py-3 font-semibold text-background">略過此題</button>
         ) : null}
 
         {status === "empty" ? (

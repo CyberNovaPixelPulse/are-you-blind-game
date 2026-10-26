@@ -23,7 +23,7 @@ export async function installFixtures(page: Page, controls: {
     } else if (url.pathname === '/api/questions/answer') {
       if (controls.answerDelayMs) await new Promise(resolve => setTimeout(resolve, controls.answerDelayMs));
       const correct = request.postDataJSON().optionId === 'correct';
-      await route.fulfill({ json: { isCorrect: correct, answerText: '正確選項', tauntText: '再接再厲', originalImageUrl: '/fixture-original.png' } });
+      await route.fulfill({ json: { questionId: request.postDataJSON().questionId, optionId: request.postDataJSON().optionId, correctOptionId: 'correct', isCorrect: correct, answerText: '正確選項', tauntText: '再接再厲', originalImageUrl: '/fixture-original.png' } });
     } else if (url.pathname === '/api/challenge/score') {
       await route.fulfill({ json: { runId: 'fixture-run', mode: 'daily', challengeDate: '2026-10-26' } });
     } else if (url.pathname === '/api/questions/view') {
