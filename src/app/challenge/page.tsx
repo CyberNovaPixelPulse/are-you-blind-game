@@ -14,12 +14,12 @@ import { recordQuestionView } from "@/lib/question-views";
 import { getMyRank } from "@/lib/leaderboard";
 import { readStoredOptions, type QuizOption } from "@/lib/question-options";
 import { quizImageUrl } from "@/lib/quiz-image";
-import { rememberSeen, writeSeenIds } from "@/lib/seen-questions";
+import { readSeenIds, rememberSeen, writeSeenIds } from "@/lib/seen-questions";
 import { supabase } from "@/lib/supabase";
+import { createQuestionPool } from "@/lib/question-pool";
 
 const ROUND_MS = 10_000;
 const INITIAL_POOL = 10;
-const REFILL_BELOW = 3;
 const PENDING_KEY = "challenge-pending-score";
 const CHALLENGE_GAMES_KEY = "challengeGamesPlayed";
 const CHALLENGE_AD_EVERY = 3;
@@ -33,11 +33,13 @@ function readChallengeGames() {
 type Question = DrawnQuestion;
 
 type QueuedQuestion = {
+  id: string;
+  challengeDate?: string;
   question: Question;
   options: QuizOption[];
 };
 
-type PoolOutcome = "ok" | "empty" | "error" | "stale";
+type PoolOutcome = "ok" | "empty" | "error" | "idle";
 
 type EndReason = "wrong" | "timeout" | "clear";
 type SaveState = "idle" | "guest" | "saved" | "error";
@@ -95,6 +97,34 @@ function reviewText(streak: number, reason: EndReason) {
   return reason === "timeout" ? "時間到，第一題沒站住" : "第一題就失手了";
 }
 
+function createChallengePool(language: string, daily: boolean) {
+  return createQuestionPool<QueuedQuestion>({
+    language,
+    mode: daily ? "assigned" : "random",
+    refillBelow: 3,
+    draw: async (count, avoidId, reservedIds, requested) => {
+      if (daily) {
+        const response = await fetch(`/api/challenge/daily-questions?language=${encodeURIComponent(requested)}`, { cache: "no-store" });
+        if (!response.ok) throw new Error("daily questions unavailable");
+        const payload = (await response.json()) as { date: string; questions: Question[] };
+        if (!Array.isArray(payload.questions) || typeof payload.date !== "string") throw new Error("invalid daily questions");
+        return {
+          error: "", resetSeen: false, keepIds: [], thinLanguage: false,
+          questions: payload.questions.map(question => ({
+            id: question.id, question, challengeDate: payload.date,
+            options: shuffle(readStoredOptions(question.options)),
+          })),
+        };
+      }
+      const result = await drawQuestions(count, avoidId, reservedIds, requested);
+      return { ...result, questions: result.questions.map(question => ({
+        id: question.id, question, options: shuffle(readStoredOptions(question.options)),
+      })) };
+    },
+    seen: { read: readSeenIds, write: writeSeenIds, remember: rememberSeen },
+  });
+}
+
 function clipName(value: string) {
   const text = [...value.trim()].slice(0, 40).join("");
   return text || "玩家";
@@ -119,10 +149,6 @@ async function playerIdentity(user: User) {
 
 export default function ChallengePage() {
   const { language, t } = useLanguage();
-  const languageRef = useRef(language);
-  useEffect(() => {
-    languageRef.current = language;
-  }, [language]);
   const router = useRouter();
   const { isVip, vipReady } = usePlayerVip();
   const [phase, setPhase] = useState<"idle" | "play" | "over">("idle");
@@ -142,41 +168,46 @@ export default function ChallengePage() {
   const [adOpen, setAdOpen] = useState(false);
   const [shame, setShame] = useState<ShameCard | null>(null);
   const [timedId, setTimedId] = useState<string | null>(null);
+  const [dailyMode, setDailyMode] = useState(false);
+  const [challengeDate, setChallengeDate] = useState<string | null>(null);
   const pendingLeave = useRef<"restart" | "home" | null>(null);
   const roundShot = useRef<{ cropUrl: string; answerText: string } | null>(null);
-  const questionsQueue = useRef<QueuedQuestion[]>([]);
-  const currentIndexRef = useRef(-1);
+  const [pools] = useState(() => ({ random: createChallengePool(language, false), daily: createChallengePool(language, true) }));
+  const [thinLanguage, setThinLanguage] = useState(false);
   const imageCacheRef = useRef(new Set<string>());
   const poolGenRef = useRef(0);
-  const fillingRef = useRef<Promise<void> | null>(null);
-  const fillingGenRef = useRef(0);
-  const poolResultRef = useRef<PoolOutcome>("ok");
-  const refillIdleRef = useRef(false);
   const clockArmedRef = useRef<string | null>(null);
+  const dailyModeRef = useRef(false);
 
   const phaseRef = useRef(phase);
   const endedRef = useRef(false);
+  const answerPendingRef = useRef(false);
+  const answerEpochRef = useRef(0);
   const lockRef = useRef(false);
   const scoreRef = useRef(0);
   const streakRef = useRef(0);
   const deadlineRef = useRef(0);
   const questionRef = useRef<Question | null>(null);
-  phaseRef.current = phase;
-  questionRef.current = question;
 
   useEffect(() => {
-    if (phaseRef.current !== "idle") return;
-    const gen = ++poolGenRef.current;
-    questionsQueue.current = [];
-    currentIndexRef.current = -1;
-    refillIdleRef.current = false;
-    imageCacheRef.current = new Set();
-    void refill(INITIAL_POOL);
-    return () => {
-      if (phaseRef.current !== "idle") return;
-      if (poolGenRef.current === gen) poolGenRef.current += 1;
-    };
-  }, [language]);
+    const isDaily = new URLSearchParams(window.location.search).get("daily") === "1";
+    dailyModeRef.current = isDaily;
+    const timeout = window.setTimeout(() => setDailyMode(isDaily), 0);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
+  function activePool() { return dailyModeRef.current ? pools.daily : pools.random; }
+
+  useEffect(() => {
+    poolGenRef.current += 1;
+    pools.random.setLanguage(language);
+    pools.daily.setLanguage(language);
+    const timeout = window.setTimeout(() => {
+      if (phaseRef.current === "play" && !questionRef.current) void loadNext();
+      else void activePool().refill(INITIAL_POOL).then(preloadUpcoming);
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [language, pools]);
 
   async function recordScore(totalScore: number, streakCount: number, currentUser: User) {
     const identity = await playerIdentity(currentUser);
@@ -236,6 +267,10 @@ export default function ChallengePage() {
     let frame = 0;
     const tick = (now: number) => {
       if (endedRef.current || phaseRef.current !== "play" || questionRef.current?.id !== question.id) return;
+      if (answerPendingRef.current) {
+        frame = requestAnimationFrame(tick);
+        return;
+      }
       const left = Math.max(0, deadlineRef.current - now);
       setRemainingMs(left);
       if (left <= 0) {
@@ -285,19 +320,9 @@ export default function ChallengePage() {
     });
   }
 
-  function preloadAround(index: number) {
-    for (const offset of [1, 2]) {
-      const upcoming = questionsQueue.current[index + offset]?.question;
-      if (!upcoming) continue;
-      preloadImage(publicImageUrl(upcoming.crop_image_path), imageCacheRef.current);
-      preloadImage(publicImageUrl(upcoming.original_image_path), imageCacheRef.current);
-    }
-  }
-
-  function preloadOpeningCrops() {
-    for (const item of questionsQueue.current.slice(0, 3)) {
-      preloadImage(publicImageUrl(item.question.crop_image_path), imageCacheRef.current);
-    }
+  function preloadUpcoming() {
+    const upcoming = activePool().peekUpcoming();
+    if (upcoming) preloadImage(publicImageUrl(upcoming.question.crop_image_path), imageCacheRef.current);
   }
 
   function armClock(id: string) {
@@ -309,10 +334,7 @@ export default function ChallengePage() {
     setTimedId(id);
   }
 
-  function present(index: number) {
-    const item = questionsQueue.current[index];
-    if (!item) return false;
-    currentIndexRef.current = index;
+  function present(item: QueuedQuestion, thin: boolean) {
     lockRef.current = false;
     clockArmedRef.current = null;
     deadlineRef.current = 0;
@@ -323,89 +345,26 @@ export default function ChallengePage() {
       cropUrl: publicImageUrl(item.question.crop_image_path),
       answerText: correct?.text ?? "",
     };
-    rememberSeen(item.question.id);
+    activePool().present(item);
+    setThinLanguage(thin);
+    if (item.challengeDate) setChallengeDate(item.challengeDate);
     recordQuestionView(item.question.id);
     questionRef.current = item.question;
     setQuestion(item.question);
     setOptions(item.options);
     setStatus("ready");
-    preloadAround(index);
+    preloadUpcoming();
     const cropUrl = publicImageUrl(item.question.crop_image_path);
     if (imageReady(cropUrl)) armClock(item.question.id);
-    if (questionsQueue.current.length - index - 1 < REFILL_BELOW) void refill(refillBatchSize());
-    return true;
-  }
-
-  async function refill(count: number) {
-    const gen = poolGenRef.current;
-    if (refillIdleRef.current && fillingGenRef.current === gen) return "empty" as const;
-    if (fillingRef.current) {
-      const flightGen = fillingGenRef.current;
-      await fillingRef.current;
-      if (poolGenRef.current !== gen) return "stale" as const;
-      if (flightGen === gen) return poolResultRef.current;
-    }
-    if (poolGenRef.current !== gen || (refillIdleRef.current && fillingGenRef.current === gen)) {
-      return poolGenRef.current === gen ? "empty" : "stale";
-    }
-    const task = (async () => {
-      const requested = languageRef.current;
-      const reservedIds = questionsQueue.current.map((item) => item.question.id);
-      const drawn = await drawQuestions(count, questionRef.current?.id, reservedIds, requested);
-      if (poolGenRef.current !== gen || languageRef.current !== requested) {
-        poolResultRef.current = "stale";
-        return;
-      }
-      if (drawn.error) {
-        poolResultRef.current = "error";
-        return;
-      }
-      const queuedIds = questionsQueue.current.map((item) => item.question.id);
-      if (drawn.resetSeen) {
-        writeSeenIds([
-          ...drawn.keepIds,
-          ...queuedIds,
-          ...drawn.questions.map((item) => item.id),
-          ...(questionRef.current ? [questionRef.current.id] : []),
-        ]);
-      }
-      const existing = new Set(queuedIds);
-      const fresh = drawn.questions.filter((item) => !existing.has(item.id));
-      if (fresh.length === 0) {
-        refillIdleRef.current = true;
-        poolResultRef.current = "empty";
-        return;
-      }
-      const wasEmpty = questionsQueue.current.length === 0;
-      questionsQueue.current = [
-        ...questionsQueue.current,
-        ...fresh.map((item) => ({
-          question: item,
-          options: shuffle(readStoredOptions(item.options)),
-        })),
-      ];
-      poolResultRef.current = "ok";
-      if (wasEmpty || currentIndexRef.current < 0) preloadOpeningCrops();
-      else preloadAround(currentIndexRef.current);
-    })();
-    fillingGenRef.current = gen;
-    fillingRef.current = task;
-    try {
-      await task;
-    } finally {
-      if (fillingRef.current === task) fillingRef.current = null;
-    }
-    return poolResultRef.current;
+    void activePool().refill(refillBatchSize()).then(preloadUpcoming);
   }
 
   function showNoQuestion(outcome: PoolOutcome) {
-    if (scoreRef.current > 0 || streakRef.current > 0) {
+    if (outcome === "idle") return;
+    if (outcome === "empty" && (scoreRef.current > 0 || streakRef.current > 0)) {
       finish("clear");
       return;
     }
-    setQuestion(null);
-    setOptions([]);
-    setTimedId(null);
     setStatus(outcome === "error" ? "error" : "empty");
     if (outcome !== "error") {
       phaseRef.current = "idle";
@@ -413,25 +372,25 @@ export default function ChallengePage() {
     }
   }
 
-  async function beginRound() {
+  async function loadNext() {
     const gen = poolGenRef.current;
-    const upcoming = questionsQueue.current.slice(currentIndexRef.current + 1);
-    questionsQueue.current = upcoming;
-    currentIndexRef.current = -1;
-    if (questionsQueue.current.length === 0) {
-      setStatus("loading");
-      const outcome = await refill(INITIAL_POOL);
-      if (endedRef.current || phaseRef.current !== "play" || poolGenRef.current !== gen) return;
-      if (!questionsQueue.current.length) {
-        showNoQuestion(outcome);
-        return;
-      }
-    }
-    preloadOpeningCrops();
-    present(0);
+    lockRef.current = true;
+    clockArmedRef.current = null;
+    deadlineRef.current = 0;
+    questionRef.current = null;
+    setQuestion(null);
+    setOptions([]);
+    setTimedId(null);
+    setStatus("loading");
+    const result = await activePool().next();
+    if (endedRef.current || phaseRef.current !== "play" || poolGenRef.current !== gen) return;
+    if (result.question) present(result.question, result.thinLanguage);
+    else showNoQuestion(result.outcome);
   }
 
   function start() {
+    answerEpochRef.current += 1;
+    answerPendingRef.current = false;
     sessionStorage.removeItem(PENDING_KEY);
     endedRef.current = false;
     lockRef.current = false;
@@ -439,7 +398,6 @@ export default function ChallengePage() {
     streakRef.current = 0;
     clockArmedRef.current = null;
     deadlineRef.current = 0;
-    refillIdleRef.current = false;
     setScore(0);
     setStreak(0);
     setRemainingMs(ROUND_MS);
@@ -448,45 +406,14 @@ export default function ChallengePage() {
     setNotice("");
     setTimedId(null);
     setShame(null);
+    poolGenRef.current += 1;
+    if (dailyModeRef.current) activePool().reset(language);
     phaseRef.current = "play";
     setPhase("play");
-    setStatus(questionsQueue.current.length > currentIndexRef.current + 1 ? "ready" : "loading");
-    void beginRound();
+    void loadNext();
   }
 
-  async function advance() {
-    const nextIndex = currentIndexRef.current + 1;
-    if (questionsQueue.current[nextIndex]) {
-      present(nextIndex);
-      return;
-    }
-    lockRef.current = true;
-    clockArmedRef.current = null;
-    deadlineRef.current = 0;
-    setTimedId(null);
-    const outcome = await refill(refillBatchSize());
-    if (endedRef.current || phaseRef.current !== "play") return;
-    if (questionsQueue.current[nextIndex]) {
-      present(nextIndex);
-      return;
-    }
-    showNoQuestion(outcome);
-  }
-
-  async function retryLoad() {
-    refillIdleRef.current = false;
-    setStatus("loading");
-    const outcome = await refill(questionsQueue.current.length === 0 ? INITIAL_POOL : refillBatchSize());
-    if (endedRef.current || phaseRef.current !== "play") return;
-    const index = currentIndexRef.current < 0 ? 0 : currentIndexRef.current;
-    if (questionsQueue.current[index]) {
-      present(index);
-      return;
-    }
-    showNoQuestion(outcome);
-  }
-
-  function onGuess(option: QuizOption) {
+  async function onGuess(option: QuizOption) {
     if (phaseRef.current !== "play" || lockRef.current || endedRef.current || !questionRef.current) return;
     if (clockArmedRef.current !== questionRef.current.id) return;
     const remaining = Math.max(0, deadlineRef.current - performance.now());
@@ -496,9 +423,43 @@ export default function ChallengePage() {
     }
     lockRef.current = true;
     const currentId = questionRef.current.id;
+    const epoch = ++answerEpochRef.current;
+    answerPendingRef.current = true;
+    setRemainingMs(remaining);
     void recordAnsweredQuestion(currentId);
-    if (!option.isCorrect) {
-      finish("wrong", { text: option.text, taunt: option.tauntText });
+    let response: Response;
+    try {
+      response = await fetch("/api/questions/answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionId: currentId, optionId: option.id }),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch {
+      if (epoch !== answerEpochRef.current || endedRef.current) return;
+      answerPendingRef.current = false;
+      deadlineRef.current = performance.now() + remaining;
+      lockRef.current = false;
+      setNotice("判定答案時發生連線錯誤，請再試一次。");
+      return;
+    }
+    const result = (await response.json().catch(() => null)) as {
+      isCorrect?: boolean; tauntText?: string; answerText?: string; error?: string;
+    } | null;
+    if (epoch !== answerEpochRef.current || endedRef.current) return;
+    answerPendingRef.current = false;
+    if (!response.ok || typeof result?.isCorrect !== "boolean") {
+      deadlineRef.current = performance.now() + remaining;
+      lockRef.current = false;
+      setNotice(result?.error || "判定答案時發生錯誤，請再試一次。");
+      return;
+    }
+    if (endedRef.current) return;
+    if (roundShot.current && typeof result.answerText === "string") {
+      roundShot.current.answerText = result.answerText;
+    }
+    if (!result.isCorrect) {
+      finish("wrong", { text: option.text, taunt: result.tauntText || option.tauntText });
       return;
     }
     const gained = scoreForRemaining(remaining);
@@ -508,7 +469,7 @@ export default function ChallengePage() {
     streakRef.current = nextStreak;
     setScore(nextScore);
     setStreak(nextStreak);
-    void advance();
+    void loadNext();
   }
 
   function runLeave(action: "restart" | "home") {
@@ -625,13 +586,15 @@ export default function ChallengePage() {
         />
       </div>
 
+      {thinLanguage && phase === "play" ? <p className="mb-2 text-xs text-amber-700 dark:text-amber-300">{t("thinPool")}</p> : null}
       {notice ? <p className="mb-3 text-sm text-emerald-700 dark:text-emerald-300">{notice}</p> : null}
 
       {phase === "idle" ? (
         <section className="flex flex-1 flex-col justify-center gap-6">
           <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-lg shadow-black/5 dark:border-white/15 dark:bg-zinc-950">
-            <p className="text-sm font-semibold tracking-[0.18em] text-amber-600 uppercase">{t.challengeMode.badge}</p>
-            <h1 className="mt-2 text-3xl font-black">⚡ {t.challengeMode.title}</h1>
+            <p className="text-sm font-semibold tracking-[0.18em] text-amber-600 uppercase">{dailyMode ? "每日挑戰" : t.challengeMode.badge}</p>
+            <h1 className="mt-2 text-3xl font-black">⚡ {dailyMode ? "今日十題" : t.challengeMode.title}</h1>
+            {dailyMode ? <p className="mt-2 text-sm">全站玩家每天挑戰同一組題目。{challengeDate ? ` 日期：${challengeDate}` : ""}</p> : null}
             {status === "empty" ? (
               <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">還沒有可以挑戰的題目。</p>
             ) : null}
@@ -698,7 +661,7 @@ export default function ChallengePage() {
             {status === "error" ? (
               <button
                 type="button"
-                onClick={() => void retryLoad()}
+                onClick={() => void loadNext()}
                 className="h-14 rounded-full bg-zinc-950 text-base font-semibold text-white dark:bg-zinc-50 dark:text-zinc-950"
               >
                 再試一次

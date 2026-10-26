@@ -6,10 +6,8 @@ import { isQuestionId } from "@/lib/seen-questions";
 export const QUIZ_LANGUAGE = "zh-TW";
 export const MIN_LANGUAGE_POOL = 3;
 
-const QUESTION_COLUMNS =
-  "id, crop_image_path, original_image_path, author_name, options, quality_score";
-const QUESTION_COLUMNS_PLAIN =
-  "id, crop_image_path, original_image_path, author_name, options";
+const QUESTION_COLUMNS = "id, crop_image_path, author_name, options, quality_score";
+const QUESTION_COLUMNS_PLAIN = "id, crop_image_path, author_name, options";
 const QUALITY_NUDGE = 0.2;
 
 export type DrawnQuestion = {
@@ -55,7 +53,7 @@ function playable(rows: RawQuestion[]) {
   return rows.filter((row) => {
     if (!isQuestionId(row.id)) return false;
     const options = readStoredOptions(row.options);
-    return options.length > 0 && options.some((option) => option.isCorrect);
+    return options.length > 1;
   });
 }
 
@@ -76,7 +74,7 @@ function toDrawn(row: RawQuestion): DrawnQuestion {
   return {
     id: row.id,
     crop_image_path: row.crop_image_path,
-    original_image_path: row.original_image_path,
+    original_image_path: "",
     author_name: row.author_name,
     options: row.options,
   };

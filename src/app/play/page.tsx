@@ -62,7 +62,6 @@ function preloadPath(path: string, cache: Set<string>) {
 function preloadQuestion(question: Question | undefined, cache: Set<string>) {
   if (!question) return;
   preloadPath(question.crop_image_path, cache);
-  preloadPath(question.original_image_path, cache);
 }
 
 function rememberStreak(next: number) {
@@ -134,6 +133,10 @@ export default function PlayPage() {
   const [question, setQuestion] = useState<Question | null>(null);
   const [options, setOptions] = useState<QuizOption[]>([]);
   const [guesses, setGuesses] = useState<Record<string, Guess>>({});
+  const [guessPending, setGuessPending] = useState(false);
+  const [correctOptionId, setCorrectOptionId] = useState<string | null>(null);
+  const [revealedAnswer, setRevealedAnswer] = useState("");
+  const [revealedOriginalUrl, setRevealedOriginalUrl] = useState("");
   const [tauntOpen, setTauntOpen] = useState(false);
   const [miss, setMiss] = useState<Miss | null>(null);
   const [solved, setSolved] = useState(false);
@@ -179,6 +182,10 @@ export default function PlayPage() {
     setMiss(null);
     setSolved(false);
     setGuesses({});
+    setGuessPending(false);
+    setCorrectOptionId(null);
+    setRevealedAnswer("");
+    setRevealedOriginalUrl("");
     pool.present(item);
     recordQuestionView(item.question.id);
     questionRef.current = item.question;
@@ -197,6 +204,9 @@ export default function PlayPage() {
     setSolved(false);
     setGuesses({});
     if (!pool.peekUpcoming()) {
+      questionRef.current = null;
+      setQuestion(null);
+      setOptions([]);
       setStatus("loading");
       setErrorMessage("");
     }
@@ -207,6 +217,7 @@ export default function PlayPage() {
       present(next);
       return;
     }
+    questionRef.current = null;
     setQuestion(null);
     setOptions([]);
     if (outcome === "error") {
@@ -268,8 +279,12 @@ export default function PlayPage() {
         const saved = Number(sessionStorage.getItem("quiz-streak") ?? "0");
         if (Number.isFinite(saved) && saved > 0) setStreak(saved);
       }
-      setThinLanguage(false);
-      void showNext();
+      if (questionRef.current) {
+        void pool.refill().then(preloadUpcoming);
+      } else {
+        setThinLanguage(false);
+        void showNext();
+      }
     }, 0);
     return () => window.clearTimeout(timeout);
   }, [language]);
@@ -280,12 +295,36 @@ export default function PlayPage() {
     return () => window.clearTimeout(timeout);
   }, [miss]);
 
-  function onGuess(option: QuizOption) {
-    if (!question || solved || miss) return;
+  async function onGuess(option: QuizOption) {
+    if (!question || solved || miss || guessPending) return;
 
+    setGuessPending(true);
     void recordAnsweredQuestion(question.id);
     setErrorMessage("");
-    const guess = { isCorrect: option.isCorrect, tauntText: option.tauntText };
+    let response: Response;
+    try {
+      response = await fetch("/api/questions/answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionId: question.id, optionId: option.id }),
+      });
+    } catch {
+      setGuessPending(false);
+      setErrorMessage("判定答案時發生連線錯誤，請再試一次。");
+      return;
+    }
+    const result = (await response.json().catch(() => null)) as {
+      isCorrect?: boolean; tauntText?: string; answerText?: string; originalImageUrl?: string; error?: string;
+    } | null;
+    setGuessPending(false);
+    if (!response.ok || typeof result?.isCorrect !== "boolean") {
+      setErrorMessage(result?.error || "判定答案時發生錯誤，請再試一次。");
+      return;
+    }
+    const guess = { isCorrect: result.isCorrect, tauntText: result.tauntText || option.tauntText };
+    setRevealedAnswer(result.answerText || "");
+    setRevealedOriginalUrl(result.originalImageUrl || "");
+    setCorrectOptionId(options.find((item) => item.text === result.answerText)?.id ?? null);
     setGuesses((current) => ({ ...current, [option.id]: guess }));
     if (guess.isCorrect) {
       const nextStreak = streak + 1;
@@ -304,7 +343,7 @@ export default function PlayPage() {
 
   const authorName = question?.author_name ?? "";
   const showOriginal = solved || miss !== null;
-  const answerText = options.find((option) => option.isCorrect)?.text ?? "";
+  const answerText = revealedAnswer || options.find((option) => option.isCorrect)?.text || "";
 
   return (
     <div className="mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden p-3 font-sans text-zinc-950 md:h-auto md:min-h-screen md:overflow-visible md:p-4 md:py-10 dark:text-zinc-50">
@@ -358,7 +397,7 @@ export default function PlayPage() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               key={showOriginal ? "original" : "crop"}
-              src={publicImageUrl(showOriginal ? question.original_image_path : question.crop_image_path)}
+              src={showOriginal ? revealedOriginalUrl : publicImageUrl(question.crop_image_path)}
               alt={showOriginal ? "揭曉原圖" : "這題的特寫"}
               className={
                 showOriginal
@@ -386,13 +425,13 @@ export default function PlayPage() {
             {options.map((option) => {
               const guess = guesses[option.id];
               const pickedWrong = miss?.id === option.id;
-              const markAnswer = Boolean(miss) && option.isCorrect;
+              const markAnswer = Boolean(miss) && option.id === correctOptionId;
               const pickedRight = Boolean(guess?.isCorrect);
               return (
                 <button
                   key={option.id}
                   type="button"
-                  disabled={solved || miss !== null}
+                  disabled={solved || miss !== null || guessPending}
                   onClick={() => onGuess(option)}
                   className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-base font-medium ${
                     pickedWrong

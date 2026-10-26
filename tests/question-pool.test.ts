@@ -121,3 +121,100 @@ test('a cycle reset preserves questions presented while the refill was in flight
   await refill;
   assert.deepEqual(seen, ['first', 'second']);
 });
+
+test('old response cleanup cannot release a newer refill or leak its language hint', async () => {
+  let oldDone!: (value: ReturnType<typeof batch> & { thinLanguage?: boolean }) => void;
+  let newDone!: (value: ReturnType<typeof batch> & { thinLanguage?: boolean }) => void;
+  let englishAvailable = false;
+  const old = new Promise<ReturnType<typeof batch>>(resolve => { oldDone = resolve; });
+  const newer = new Promise<ReturnType<typeof batch>>(resolve => { newDone = resolve; });
+  const pool = createQuestionPool({
+    language: 'zh-TW',
+    draw: async (_n, _a, _r, lang) => lang === 'zh-TW' ? old : englishAvailable ? batch(['unexpected']) : newer,
+    seen: { read: () => [], write: () => {}, remember: () => {} },
+  });
+  const stale = pool.refill();
+  pool.setLanguage('en');
+  const pending = pool.next();
+  oldDone({ ...batch(['old']), thinLanguage: true });
+  await stale;
+  englishAvailable = true;
+  const coalesced = pool.refill();
+  newDone({ ...batch(['english']), thinLanguage: false });
+  await coalesced;
+  assert.equal((await pending).question?.id, 'english');
+  assert.equal((await pool.next()).thinLanguage, false);
+});
+
+test('mixed-language hint follows the presented batch rather than a later background refill', async () => {
+  let initial = true;
+  const pool = createQuestionPool({
+    language: 'en',
+    draw: async () => {
+      if (initial) { initial = false; return { ...batch(['english1', 'english2']), thinLanguage: false }; }
+      return { ...batch(['mixed']), thinLanguage: true };
+    },
+    seen: { read: () => [], write: () => {}, remember: () => {} },
+  });
+  const first = await pool.next(); pool.present(first.question!);
+  await pool.refill();
+  assert.equal((await pool.next()).thinLanguage, false);
+  assert.equal((await pool.next()).thinLanguage, true);
+});
+
+test('background failure preserves upcoming and seen state, and empty success is explicit exhaustion', async () => {
+  let state: 'initial' | 'failure' | 'empty' | 'recover' = 'initial';
+  let seen: string[] = [];
+  const pool = createQuestionPool({
+    language: 'en', draw: async () => {
+      if (state === 'initial') return batch(['first', 'second']);
+      if (state === 'failure') return { ...batch([], true), error: 'offline' };
+      return batch(state === 'empty' ? [] : ['recovered']);
+    },
+    seen: { read: () => seen, write: ids => { seen = ids; }, remember: id => { seen.push(id); } },
+  });
+  pool.present((await pool.next()).question!);
+  state = 'failure';
+  assert.equal(await pool.refill(), 'error');
+  assert.equal((await pool.next()).question?.id, 'second');
+  assert.deepEqual(seen, ['first']);
+  assert.equal((await pool.next()).outcome, 'error');
+  state = 'empty';
+  assert.equal((await pool.next()).outcome, 'empty');
+  state = 'recover';
+  assert.equal((await pool.next()).question?.id, 'recovered');
+});
+
+test('assigned daily source preserves its order, never cycles, and resets only for a new run', async () => {
+  let seen: string[] = [];
+  const pool = createQuestionPool({
+    language: 'en', mode: 'assigned',
+    draw: async () => batch(['current', 'first', 'first', 'last'], true),
+    seen: { read: () => seen, write: ids => { seen = ids; }, remember: id => { seen.push(id); } },
+  });
+  pool.present(question('current'));
+  assert.equal((await pool.next()).question?.id, 'first');
+  pool.present(question('first'));
+  assert.equal((await pool.next()).question?.id, 'last');
+  pool.present(question('last'));
+  assert.equal((await pool.next()).outcome, 'empty');
+  assert.equal((await pool.next()).outcome, 'empty');
+  assert.deepEqual(seen, ['current', 'first', 'last']);
+  pool.reset('en');
+  assert.equal((await pool.next()).question?.id, 'current');
+});
+
+test('failed daily acquisition retries the assigned source and language changes keep consumed questions excluded', async () => {
+  let online = false;
+  const pool = createQuestionPool({
+    language: 'en', mode: 'assigned',
+    draw: async () => online ? batch(['one', 'two']) : { ...batch([]), error: 'offline' },
+    seen: { read: () => [], write: () => {}, remember: () => {} },
+  });
+  assert.equal((await pool.next()).outcome, 'error');
+  online = true;
+  pool.present((await pool.next()).question!);
+  pool.setLanguage('zh-TW');
+  assert.equal((await pool.next()).question?.id, 'two');
+  assert.equal((await pool.next()).outcome, 'empty');
+});
