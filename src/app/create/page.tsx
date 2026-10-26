@@ -238,7 +238,7 @@ export default function CreatePage() {
   const [options, setOptions] = useState<OptionDraft[]>(emptyOptions);
   const [correctIndex, setCorrectIndex] = useState(0);
   const [phase, setPhase] = useState<
-    "idle" | "compressing" | "moderating" | "uploading" | "saving" | "confirming"
+    "idle" | "compressing" | "moderating" | "uploading" | "saving" | "confirming" | "cancelling"
   >("idle");
   const [busy, setBusy] = useState(false);
   const submittingRef = useRef(false);
@@ -246,6 +246,8 @@ export default function CreatePage() {
     flow: ReturnType<typeof createBrowserPublication>; crop: File; original: File; authorName: string; review?: ModerationReport;
   } | null>(null);
   const [publicationStatus, setPublicationStatus] = useState<PublicationStatus | null>(null);
+  const cancellingRef = useRef(false);
+  const [cancelling, setCancelling] = useState(false);
   const [publicationFrozen, setPublicationFrozen] = useState(false);
   const [formError, setFormError] = useState("");
   const [moderationReport, setModerationReport] = useState<ModerationReport | null>(null);
@@ -493,12 +495,32 @@ export default function CreatePage() {
     setOptions(emptyOptions()); setCorrectIndex(0);
   }
 
+  async function cancelPublication() {
+    const current = publicationRef.current;
+    if (!current || cancellingRef.current) return;
+    cancellingRef.current = true;
+    setCancelling(true);
+    try {
+      const outcome = await current.flow.cancel();
+      if (publicationRef.current !== current) return;
+      showPublicationOutcome(outcome);
+      if (outcome.state === "cancelled" || outcome.state === "published") {
+        submittingRef.current = false;
+        setBusy(false);
+        setPhase("idle");
+      }
+    } finally { cancellingRef.current = false; setCancelling(false); }
+  }
+
   async function resumePublication(confirmOnly: boolean) {
-    if (submittingRef.current || !publicationRef.current) return;
+    const current = publicationRef.current;
+    if (submittingRef.current || !current) return;
     submittingRef.current = true; setBusy(true);
-    try { showPublicationOutcome(await (confirmOnly ? publicationRef.current.flow.confirm() : publicationRef.current.flow.run())); }
-    catch { setPublicationStatus({state:"unknown",message:"發布結果尚未確認，請再次確認"}); }
-    finally { submittingRef.current=false;setBusy(false);setPhase("idle"); }
+    try {
+      const outcome = await (confirmOnly ? current.flow.confirm() : current.flow.run());
+      if (publicationRef.current === current) showPublicationOutcome(outcome);
+    } catch { if (publicationRef.current === current) setPublicationStatus({state:"unknown",message:"發布結果尚未確認，請再次確認"}); }
+    finally { if (publicationRef.current === current) { submittingRef.current=false;setBusy(false);setPhase("idle"); } }
   }
 
   async function onSubmit(event: FormEvent) {
@@ -511,6 +533,7 @@ export default function CreatePage() {
     const draft={authorName:authorName.trim(),language:targetLanguage,cropArea:{...croppedAreaPixels},
       options:options.map((option,index)=>({text:option.optionText.trim(),is_correct:index===correctIndex,taunt:option.tauntText.trim()}))};
     submittingRef.current=true;setBusy(true);
+    let submittedFlow: ReturnType<typeof createBrowserPublication> | undefined;
     try {
       const getToken=async()=>{
         const session=await supabase.auth.getSession();
@@ -524,7 +547,7 @@ export default function CreatePage() {
       const original=await compressOriginalImage(sourceFile);
       const snapshot:PublicationSnapshot={...draft,crop:await publicationImage(crop),original:await publicationImage(original)};
       const id=crypto.randomUUID();
-      const flow=createBrowserPublication({id,snapshot,crop,original,getToken,onPhase:setPhase,
+      const flow=createBrowserPublication({id,snapshot,crop,original,getToken,onPhase:next=>{if(publicationRef.current?.flow===flow)setPhase(next);},
         review:async (questionId,fixed)=>{
           const correct=fixed.options.find(o=>o.is_correct)!;
           const response=await fetch("/api/moderate-quiz",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${await getToken()}`},
@@ -534,18 +557,21 @@ export default function CreatePage() {
           const review=readReview(moderation);
           if(!response.ok || !review) throw new Error(moderation.message || copy.reviewFail);
           if(!moderation.passed || review.qualityScore<60 || review.breakdown.safety.violated){
-            setModerationReport(review);throw new PublicationFailure(copy.reviewFail,"rejected");
+            if(publicationRef.current?.flow===flow)setModerationReport(review);throw new PublicationFailure(copy.reviewFail,"rejected");
           }
           if(!moderation.attestation) throw new PublicationFailure("審核證明無效，請重新審核","needs-review");
-          if(publicationRef.current) publicationRef.current.review=review;
+          if(publicationRef.current?.flow===flow) publicationRef.current.review=review;
           return moderation.attestation;
         }});
+      submittedFlow=flow;
       publicationRef.current={flow,crop,original,authorName:draft.authorName};
+      setPublicationStatus({state:"pending"});
       setTargetOverride(draft.language);
       setPublicationFrozen(true);
-      showPublicationOutcome(await flow.run());
-    } catch(error) {setFormError(readableError(error,copy));}
-    finally {submittingRef.current=false;setBusy(false);setPhase("idle");}
+      const outcome=await flow.run();
+      if(publicationRef.current?.flow===flow)showPublicationOutcome(outcome);
+    } catch(error) {if(!submittedFlow || publicationRef.current?.flow===submittedFlow)setFormError(readableError(error,copy));}
+    finally {if(!submittedFlow || publicationRef.current?.flow===submittedFlow){submittingRef.current=false;setBusy(false);setPhase("idle");}}
   }
 
   const pending = busy || publicationFrozen;
@@ -803,13 +829,15 @@ export default function CreatePage() {
 
         {publicationStatus ? (
           <section aria-label="發布狀態" className="rounded-2xl border p-4">
-            <p role="status">{publicationStatus.state === "published" ? "題目已發布" : publicationStatus.state === "unknown" ? "正在確認發布結果" : publicationStatus.message || "本次內容已固定，可繼續這次發布"}</p>
-            {publicationStatus.state !== "published" ? <button type="button" disabled={busy} onClick={()=>void resumePublication(true)}>再次確認</button> : null}
+            <p role="status">{publicationStatus.state === "cancelled" ? "已取消，暫存圖片將由系統清理。" : publicationStatus.state === "published" ? "題目已發布" : publicationStatus.state === "unknown" ? "正在確認發布結果" : publicationStatus.message || "本次內容已固定，可繼續這次發布"}</p>
+            {!["published","cancelled"].includes(publicationStatus.state) ? <button type="button" disabled={busy} onClick={()=>void resumePublication(true)}>再次確認</button> : null}
+            {!["published","cancelled"].includes(publicationStatus.state) ? <button type="button" disabled={cancelling} onClick={()=>void cancelPublication()}>取消這次發布</button> : null}
+            {publicationStatus.state === "cancelled" ? <button type="button" onClick={()=>{publicationRef.current=null;setPublicationFrozen(false);setPublicationStatus(null);setPhase("idle");}}>繼續出題</button> : null}
             {publicationStatus.state === "pending" ? <button type="button" disabled={busy} onClick={()=>void resumePublication(false)}>繼續這次發布</button> : null}
-            {publicationStatus.state === "rejected" ? <button type="button" disabled={busy} onClick={()=>{publicationRef.current=null;setPublicationFrozen(false);setPublicationStatus(null);}}>重新編輯</button> : null}
             {publicationStatus.state === "published" && !result ? <button type="button" onClick={()=>{publicationRef.current=null;setPublicationFrozen(false);setPublicationStatus(null);}}>建立另一題</button> : null}
           </section>
         ) : null}
+        {cancelling ? <p role="status">正在確認取消結果</p> : null}
         {phase === "confirming" ? <p role="status">正在確認發布結果</p> : null}
         <form className="flex flex-col gap-8" onSubmit={onSubmit}>
         <fieldset disabled={pending} className="flex min-w-0 flex-col gap-8">

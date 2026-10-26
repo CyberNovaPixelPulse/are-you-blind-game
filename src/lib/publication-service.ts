@@ -44,6 +44,7 @@ export function createPublicationService(config: {
 
   return {
     begin, query,
+    cancel: async (id: string, value: PublicationSnapshot) => await config.call('publication_cancel', { ...args(id), p_snapshot: readPublicationSnapshot(value) }) as PublicationStatus,
     async upload(id: string, role: 'crop' | 'original', bytes: Uint8Array, contentType: string) {
       if (!['crop','original'].includes(role) || bytes.length > (role === 'crop' ? 150 : 300)*1024) throw new PublicationFailure('圖片資料無效','rejected');
       const sha256 = createHash('sha256').update(bytes).digest('hex');
@@ -62,7 +63,7 @@ export function createPublicationService(config: {
     async commit(id: string, value: PublicationSnapshot, proof: unknown): Promise<PublicationStatus> {
       const snapshot = readPublicationSnapshot(value);
       const previous = await begin(id,snapshot);
-      if (previous.state === 'published') return previous;
+      if (previous.state !== 'pending') return previous;
       const review = config.verify(proof);
       if (!review || review.expiresAt < Date.now()) throw new PublicationFailure('審核證明無效或已過期，請重新審核','needs-review');
       const correct = snapshot.options.find(o=>o.is_correct)!;

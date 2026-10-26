@@ -13,8 +13,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const context=await publicationForRequest(request);
   if(context.error) return context.error;
-  const body=await readJsonLimited<{id:string;snapshot:PublicationSnapshot}>(request,16000);
+  const body=await readJsonLimited<{id:string;snapshot:PublicationSnapshot;action?:string}>(request,16000);
   if(!body || typeof body.id!=='string') return Response.json({message:'發布資料不完整'},{status:400});
-  try {return Response.json(await context.service.begin(body.id,body.snapshot));}
+  try {return Response.json(await (body.action === 'cancel' ? context.service.cancel(body.id,body.snapshot) : context.service.begin(body.id,body.snapshot)));}
   catch(error){return publicationError(error);}
 }

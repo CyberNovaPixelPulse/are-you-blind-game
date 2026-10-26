@@ -24,6 +24,7 @@ test('independent publishers use PostgreSQL to commit exactly one question and r
     await a.query(`create role anon; create role authenticated; create role service_role bypassrls;
       create table questions(id uuid primary key, crop_image_path text, original_image_path text, author_id uuid, author_name text, difficulty text, status text, language text, quality_score integer, score_breakdown jsonb, options jsonb);`);
     await a.query(await readFile('supabase/migrations/20261026110107_question_publication_lifecycle.sql', 'utf8'));
+    await a.query(await readFile('supabase/migrations/20261026132427_publication_cancellation_cleanup.sql', 'utf8'));
     await a.query('grant select,insert on questions to service_role; set role service_role');
     await b.query('set role service_role');
     const image = Buffer.from('immutable image');
@@ -46,7 +47,7 @@ test('independent publishers use PostgreSQL to commit exactly one question and r
       verify: proof => ({ userId: owner, questionId: String(proof), answer: '選項1', distractors: snapshot.options.slice(1).map(({text,taunt})=>({text,taunt})), imageSha256:digest, qualityScore:70, scoreBreakdown:{}, expiresAt:Date.now()+60000 }),
     });
     const flows = [service(a),service(b)].map(api => createPublicationFlow({ id, snapshot, gateway: {
-      begin: api.begin, query: api.query, review: async id => id,
+      begin: api.begin, query: api.query, cancel: api.cancel, review: async id => id,
       upload: async role => api.upload(id,role,image,'image/webp'),
       commit: async (id,snapshot,proof) => api.commit(id,snapshot,proof),
     }}));
@@ -65,7 +66,7 @@ test('independent publishers use PostgreSQL to commit exactly one question and r
         const result=await reopened.query(`select public.${name}(${Object.keys(args).map((k,i)=>`${k} => $${i+1}`).join(',')}) as value`,Object.values(args));return result.rows[0].value;
       },images:{put:async(bucket,path,bytes)=>{stored.set(`${bucket}/${path}`,Buffer.from(bytes));throw new Error('lost storage response');},get:async(bucket,path)=>stored.get(`${bucket}/${path}`)!,publicUrl:path=>`https://fixture.invalid/${path}`},
       verify:proof=>({userId:owner,questionId:String(proof),answer:'選項1',distractors:snapshot.options.slice(1).map(({text,taunt})=>({text,taunt})),imageSha256:digest,qualityScore:70,scoreBreakdown:{},expiresAt:Date.now()+60000})});
-      const recovered=createPublicationFlow({id:second,snapshot,gateway:{begin:recovering.begin,query:recovering.query,review:async id=>id,
+      const recovered=createPublicationFlow({id:second,snapshot,gateway:{begin:recovering.begin,query:recovering.query,cancel:recovering.cancel,review:async id=>id,
         upload:async role=>recovering.upload(second,role,image,'image/webp'),commit:(id,snapshot,proof)=>recovering.commit(id,snapshot,proof)}});
       assert.equal((await recovered.run()).state,'published');
       await assert.rejects(restored.upload(second,'crop',Buffer.from('different bytes'),'image/webp'));
@@ -74,7 +75,7 @@ test('independent publishers use PostgreSQL to commit exactly one question and r
         if new.state='published' and new.id='${third}' then raise exception 'fixture result save failed'; end if; return new; end $$;
         create trigger fail_result_save before update on public.question_publications for each row execute function fail_result_save(); set role service_role;`);
       const rollbackApi=service(reopened);
-      const rollbackFlow=createPublicationFlow({id:third,snapshot,gateway:{begin:rollbackApi.begin,query:rollbackApi.query,review:async id=>id,
+      const rollbackFlow=createPublicationFlow({id:third,snapshot,gateway:{begin:rollbackApi.begin,query:rollbackApi.query,cancel:rollbackApi.cancel,review:async id=>id,
         upload:async role=>rollbackApi.upload(third,role,image,'image/webp'),commit:(id,snapshot,proof)=>rollbackApi.commit(id,snapshot,proof)}});
       assert.equal((await rollbackFlow.run()).state,'pending');
       await b.query('reset role; drop trigger fail_result_save on public.question_publications; set role service_role');

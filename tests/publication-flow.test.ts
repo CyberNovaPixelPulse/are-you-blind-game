@@ -14,6 +14,7 @@ test('a lost commit response is confirmed without creating a second publication 
   const flow = createPublicationFlow({
     id: 'publication-one', snapshot,
     gateway: {
+      cancel: async () => { throw Error('unexpected cancel'); },
       begin: async () => ({ state: 'pending' }),
       review: async () => 'proof',
       upload: async role => `${role}.webp`,
@@ -29,6 +30,7 @@ test('a lost commit response is confirmed without creating a second publication 
 
 test('unknown results keep the same publication and lookup never performs another review or upload', async () => {
   const flow=createPublicationFlow({id:'same',snapshot,gateway:{
+    cancel: async () => { throw Error('unexpected cancel'); },
     begin:async()=>{throw new Error('offline');},
     query:async()=>{throw new Error('offline');},
     review:async()=>{throw new Error('must not review');},
@@ -44,6 +46,7 @@ test('a failed upload resumes the fixed content even when the caller edits its d
   let online=false;
   const seenAuthors:string[]=[];
   const flow=createPublicationFlow({id:'same',snapshot:draft,gateway:{
+    cancel: async () => { throw Error('unexpected cancel'); },
     begin:async(_id,fixed)=>{seenAuthors.push(fixed.authorName);return {state:'pending'};},
     review:async()=> 'proof',
     query:async()=>({state:'pending'}),
@@ -54,4 +57,68 @@ test('a failed upload resumes the fixed content even when the caller edits its d
   draft.authorName='另一份內容'; online=true;
   assert.equal((await flow.run()).state,'published');
   assert.deepEqual(seenAuthors,['作者','作者']);
+});
+
+test('cancellation stops further uploads and remains terminal even while an upload is in flight', async () => {
+  let release!: () => void;
+  let entered!: () => void;
+  const uploading = new Promise<void>(resolve => { entered = resolve; });
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const uploaded: string[] = [];
+  let cancelled = false;
+  const flow = createPublicationFlow({ id: 'same', snapshot, gateway: {
+    begin: async () => ({ state: 'pending' }), review: async () => 'proof',
+    upload: async role => { uploaded.push(role); entered(); await held; return role; },
+    commit: async () => { throw Error('must not commit after cancellation'); },
+    query: async () => ({ state: cancelled ? 'cancelled' : 'pending' }),
+    cancel: async () => { cancelled = true; return { state: 'cancelled', cleanupPending: true }; },
+  } });
+  const running = flow.run(); await uploading;
+  assert.equal((await flow.cancel()).state, 'cancelled');
+  release();
+  assert.equal((await running).state, 'cancelled');
+  assert.equal((await flow.run()).state, 'cancelled');
+  assert.deepEqual(uploaded, ['crop']);
+});
+
+test('cancellation confirms a committed result and never deletes or cancels an already published question', async () => {
+  let cancellations = 0;
+  const flow = createPublicationFlow({ id: 'same', snapshot, gateway: {
+    begin: async () => ({ state: 'pending' }), review: async () => 'proof', upload: async role => role,
+    commit: async () => ({ state: 'published', result: { id: 'same', quality_score: 70 } }),
+    query: async () => ({ state: 'published', result: { id: 'same', quality_score: 70 } }),
+    cancel: async () => { cancellations++; return { state: 'cancelled' }; },
+  } });
+  assert.equal((await flow.cancel()).state, 'published');
+  assert.equal((await flow.run()).state, 'published');
+  assert.equal(cancellations, 0);
+});
+
+test('an offline cancellation remains unconfirmed and performs no destructive operation', async () => {
+  let cancellations = 0;
+  const flow = createPublicationFlow({ id: 'same', snapshot, gateway: {
+    begin: async () => ({ state: 'pending' }), review: async () => 'proof', upload: async role => role,
+    commit: async () => { throw Error('must not commit'); },
+    query: async () => { throw Error('offline'); },
+    cancel: async () => { cancellations++; return { state: 'cancelled' }; },
+  } });
+  assert.equal((await flow.cancel()).state, 'unknown');
+  assert.equal((await flow.run()).state, 'unknown');
+  assert.equal(cancellations, 0);
+});
+
+test('a query started before cancellation cannot replace its terminal verdict with stale pending', async () => {
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  let queries = 0;
+  const flow=createPublicationFlow({id:'same',snapshot,gateway:{
+    begin:async()=>({state:'pending'}),review:async()=> 'proof',upload:async role=>role,
+    commit:async()=>({state:'pending'}),
+    query:async()=>{queries++;if(queries===1)await held;return {state:'pending'};},
+    cancel:async()=>({state:'cancelled',cleanupPending:true}),
+  }});
+  const oldQuery=flow.confirm();
+  assert.equal((await flow.cancel()).state,'cancelled');
+  release();
+  assert.equal((await oldQuery).state,'cancelled');
 });

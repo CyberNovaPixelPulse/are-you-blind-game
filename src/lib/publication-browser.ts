@@ -15,11 +15,12 @@ export function createBrowserPublication(config: {
       if(payload.state==='rejected'||payload.state==='needs-review') throw new PublicationFailure(payload.message,payload.state);
       throw new Error('發布結果尚未確認');
     }
-    if(!['pending','published','unknown','needs-review','rejected'].includes(payload.state)
+    if(!['pending','published','unknown','needs-review','rejected','cancelled'].includes(payload.state)
       || (payload.state==='published' && (payload.result?.id!==config.id || typeof payload.result.quality_score!=='number'))) throw new Error('發布結果格式無效');
     return payload;
   }
   return createPublicationFlow({id:config.id,snapshot:config.snapshot,onPhase:config.onPhase,gateway:{
+    cancel:(id,snapshot)=>request('/api/questions/publication',{id,snapshot,action:'cancel'}),
     begin:(id,snapshot)=>request('/api/questions/publication',{id,snapshot}),
     query:id=>request(`/api/questions/publication?id=${encodeURIComponent(id)}`),
     review:config.review,
