@@ -10,7 +10,8 @@ import { drawQuestions, recordAnsweredQuestion, type DrawnQuestion } from "@/lib
 import { quizImageUrl } from "@/lib/quiz-image";
 import { recordQuestionView } from "@/lib/question-views";
 import { readStoredOptions, type QuizOption } from "@/lib/question-options";
-import { rememberSeen, writeSeenIds } from "@/lib/seen-questions";
+import { readSeenIds, rememberSeen, writeSeenIds } from "@/lib/seen-questions";
+import { createQuestionPool } from "@/lib/question-pool";
 
 type Question = DrawnQuestion;
 
@@ -32,8 +33,6 @@ type QueuedQuestion = {
   options: QuizOption[];
 };
 
-const POOL_SIZE = 5;
-const REFILL_BELOW = 2;
 const CLASSIC_AD_EVERY = 15;
 
 function shuffle<T>(items: T[]): T[] {
@@ -132,7 +131,6 @@ async function celebrateMilestone() {
 
 export default function PlayPage() {
   const { language, t } = useLanguage();
-  const languageRef = useRef(language);
   const [question, setQuestion] = useState<Question | null>(null);
   const [options, setOptions] = useState<QuizOption[]>([]);
   const [guesses, setGuesses] = useState<Record<string, Guess>>({});
@@ -151,28 +149,37 @@ export default function PlayPage() {
   const { isVip, vipReady } = usePlayerVip();
   const vipHoldLock = useRef(false);
   const [memeIndex, setMemeIndex] = useState(0);
-  const queueRef = useRef<QueuedQuestion[]>([]);
+  const [pool] = useState(() => createQuestionPool<QueuedQuestion & { id: string }>({
+      language,
+      draw: async (count, avoidId, reservedIds, requestedLanguage) => {
+        const result = await drawQuestions(count, avoidId, reservedIds, requestedLanguage);
+        return {
+          ...result,
+          questions: result.questions.map(question => ({
+            id: question.id,
+            question,
+            options: shuffle(readStoredOptions(question.options)),
+          })),
+        };
+      },
+      seen: { read: readSeenIds, write: writeSeenIds, remember: rememberSeen },
+  }));
   const questionRef = useRef<Question | null>(null);
-  const fillingRef = useRef<Promise<void> | null>(null);
-  const refillIdleRef = useRef(false);
-  const refillResultRef = useRef<"ok" | "error" | "idle">("ok");
   const imageCacheRef = useRef(new Set<string>());
   const streakLoadedRef = useRef(false);
   const drawGenRef = useRef(0);
-  const fillingGenRef = useRef(0);
-  questionRef.current = question;
 
   function preloadUpcoming() {
     preloadQuestion(questionRef.current ?? undefined, imageCacheRef.current);
-    preloadQuestion(queueRef.current[0]?.question, imageCacheRef.current);
+    preloadQuestion(pool.peekUpcoming()?.question, imageCacheRef.current);
   }
 
-  function present(item: QueuedQuestion) {
+  function present(item: QueuedQuestion & { id: string }) {
     setTauntOpen(false);
     setMiss(null);
     setSolved(false);
     setGuesses({});
-    rememberSeen(item.question.id);
+    pool.present(item);
     recordQuestionView(item.question.id);
     questionRef.current = item.question;
     setQuestion(item.question);
@@ -180,88 +187,24 @@ export default function PlayPage() {
     setStatus("ready");
     setErrorMessage("");
     preloadUpcoming();
-    if (queueRef.current.length < REFILL_BELOW) void refill();
-  }
-
-  async function refill() {
-    const gen = drawGenRef.current;
-    if (refillIdleRef.current && fillingGenRef.current === gen) return refillResultRef.current;
-    if (fillingRef.current) {
-      const flightGen = fillingGenRef.current;
-      await fillingRef.current;
-      if (drawGenRef.current !== gen) return "idle" as const;
-      if (flightGen === gen) return refillResultRef.current;
-    }
-    if (drawGenRef.current !== gen) return "idle" as const;
-    const task = (async () => {
-      const reservedIds = queueRef.current.map((item) => item.question.id);
-      const requested = languageRef.current;
-      const drawn = await drawQuestions(POOL_SIZE, questionRef.current?.id, reservedIds, requested);
-      if (drawGenRef.current !== gen || languageRef.current !== requested) {
-        refillResultRef.current = "idle";
-        return;
-      }
-      setThinLanguage(drawn.thinLanguage === true);
-      if (drawn.error) {
-        refillResultRef.current = "error";
-        return;
-      }
-      const queuedIds = queueRef.current.map((item) => item.question.id);
-      if (drawn.resetSeen) {
-        writeSeenIds([
-          ...drawn.keepIds,
-          ...queuedIds,
-          ...drawn.questions.map((item) => item.id),
-          ...(questionRef.current ? [questionRef.current.id] : []),
-        ]);
-      }
-      const existing = new Set(queuedIds);
-      const fresh = drawn.questions.filter((item) => !existing.has(item.id));
-      if (fresh.length === 0) {
-        refillIdleRef.current = true;
-        refillResultRef.current = "idle";
-        return;
-      }
-      queueRef.current = [
-        ...queueRef.current,
-        ...fresh.map((item) => ({
-          question: item,
-          options: shuffle(readStoredOptions(item.options)),
-        })),
-      ];
-      refillResultRef.current = "ok";
-      preloadUpcoming();
-    })();
-    fillingGenRef.current = gen;
-    fillingRef.current = task;
-    try {
-      await task;
-    } finally {
-      if (fillingRef.current === task) fillingRef.current = null;
-    }
-    return refillResultRef.current;
+    void pool.refill().then(preloadUpcoming);
   }
 
   async function showNext() {
     const gen = drawGenRef.current;
-    refillIdleRef.current = false;
     setTauntOpen(false);
     setMiss(null);
     setSolved(false);
     setGuesses({});
-    const next = queueRef.current.shift();
-    if (next) {
-      if (drawGenRef.current !== gen) return;
-      present(next);
-      return;
+    if (!pool.peekUpcoming()) {
+      setStatus("loading");
+      setErrorMessage("");
     }
-    setStatus("loading");
-    setErrorMessage("");
-    const outcome = await refill();
+    const { question: next, outcome, thinLanguage: thin } = await pool.next();
     if (drawGenRef.current !== gen) return;
-    const queued = queueRef.current.shift();
-    if (queued) {
-      present(queued);
+    setThinLanguage(thin);
+    if (next) {
+      present(next);
       return;
     }
     setQuestion(null);
@@ -317,10 +260,8 @@ export default function PlayPage() {
   }, [holdForVip, vipReady, isVip]);
 
   useEffect(() => {
-    languageRef.current = language;
     drawGenRef.current += 1;
-    queueRef.current = [];
-    refillIdleRef.current = false;
+    pool.setLanguage(language);
     const timeout = window.setTimeout(() => {
       if (!streakLoadedRef.current) {
         streakLoadedRef.current = true;
