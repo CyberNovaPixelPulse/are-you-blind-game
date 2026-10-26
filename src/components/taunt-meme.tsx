@@ -1,5 +1,6 @@
 "use client";
 
+import { Modal } from "@/components/modal";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLanguage } from "@/components/language-provider";
@@ -191,11 +192,10 @@ export function QuestionReportButton({
         ) : null}
         {reportOpen ? (
           <div className="animate-taunt-backdrop fixed inset-0 z-[80] flex items-end justify-center bg-black/70 p-4 backdrop-blur-md sm:items-center">
-            <div
-              role="dialog"
-              aria-modal="true"
+            <Modal
+              onDismiss={closeReport}
               aria-labelledby="report-title"
-              className="animate-taunt-pop max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-white/10 bg-zinc-950 p-5 text-zinc-50 shadow-2xl"
+              className="overscroll-contain animate-taunt-pop max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-white/10 bg-zinc-950 p-5 text-zinc-50 shadow-2xl"
             >
               <h2 id="report-title" className="text-xl font-bold">
                 回報這題
@@ -221,10 +221,14 @@ export function QuestionReportButton({
                   );
                 })}
               </div>
+              <label htmlFor="question-report-details" className="mt-4 block text-sm font-medium">補充說明（選填）</label>
               <textarea
+                id="question-report-details"
+                name="report-details"
+                autoComplete="off"
                 value={details}
                 onChange={(event) => setDetails(event.target.value)}
-                placeholder="請具體告訴我們哪裡有問題（選填）..."
+                placeholder="例如：圖片與正解不符…"
                 rows={4}
                 maxLength={500}
                 disabled={submitting}
@@ -251,7 +255,7 @@ export function QuestionReportButton({
               >
                 取消
               </button>
-            </div>
+            </Modal>
           </div>
         ) : null}
       </>
@@ -290,11 +294,10 @@ export function TauntDialog({
   const badge = badges[index % badges.length];
   const dialog = (
     <div className="animate-taunt-backdrop fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 backdrop-blur-md sm:items-center">
-      <div
-        role="dialog"
-        aria-modal="true"
+      <Modal
+        onDismiss={onGiveUp}
         aria-labelledby="taunt-title"
-        className="animate-taunt-pop max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-red-500/30 bg-zinc-950/95 p-5 text-zinc-50 shadow-2xl shadow-red-500/20"
+        className="overscroll-contain animate-taunt-pop max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-red-500/30 bg-zinc-950/95 p-5 text-zinc-50 shadow-2xl shadow-red-500/20"
       >
         <h2 id="taunt-title" className="text-center text-2xl font-extrabold tracking-tight text-red-400">
           {t("wrong")}
@@ -326,7 +329,7 @@ export function TauntDialog({
         </div>
         <button
           type="button"
-          autoFocus
+          data-modal-initial-focus
           onClick={onGiveUp}
           className="mt-5 h-14 w-full rounded-2xl bg-gradient-to-r from-red-500 via-orange-500 to-amber-400 text-base font-bold text-white shadow-lg shadow-orange-500/30 transition duration-150 hover:brightness-110 active:scale-95"
         >
@@ -337,7 +340,7 @@ export function TauntDialog({
           label={`🚩 ${t("report")}`}
           className="mt-3 w-full text-center text-xs font-medium text-zinc-500 transition hover:text-zinc-300"
         />
-      </div>
+      </Modal>
     </div>
   );
 

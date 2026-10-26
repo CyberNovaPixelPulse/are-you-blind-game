@@ -133,32 +133,35 @@ export type VipCheckoutCopy = {
   payNoticeRefund: string;
   payNoticeSupport: string;
   supportEmail: string;
+  purchaseConsent: string;
 };
 
 export const VIP_CHECKOUT_COPY: Record<"zh-TW" | "en", VipCheckoutCopy> = {
   "zh-TW": {
     planAPrice: "新台幣 NT$ 19 / 月",
-    planADesc: "自建好友房、全站免廣告",
+    planADesc: "自建好友房、全站免廣告；單次付款使用一個月，不自動續扣",
     planBPrice: "新台幣 NT$ 39 終身買斷",
     planBDesc: "自建好友房、全站免廣告，一次付清永久使用",
     deliveryNote: "付款成功後系統立即開通權益",
     payNoticeEcpay: "• 本服務由綠界科技 ECPay 提供安全加密付款支援",
     payNoticeRefund:
-      "• 購買須知：本方案屬非以有形媒介提供之數位服務，完成付款開通後，依消保法第十九條第二項規定，不適用七天鑑賞期無條件退換貨。",
+      "• 購買須知：本方案為數位服務；只有在符合法定例外、付款前已告知，且取得您事先同意後，才會於權益開通時開始提供。",
     payNoticeSupport: "• 如遇付款或權限開通問題，請聯繫客服信箱：support@areyoublind.game（或站長信箱）",
     supportEmail: "support@areyoublind.game",
+    purchaseConsent: "我已閱讀購買須知，並同意付款成功後立即開始提供數位服務。",
   },
   en: {
     planAPrice: "New Taiwan Dollar NT$ 19 / month",
-    planADesc: "Private friend rooms and an ad-free experience",
+    planADesc: "Private friend rooms and an ad-free experience; one payment covers one month, with no automatic renewal.",
     planBPrice: "New Taiwan Dollar NT$ 39 lifetime",
     planBDesc: "Private friend rooms and an ad-free experience, paid once for lifetime access",
     deliveryNote: "Access is activated immediately after successful payment.",
     payNoticeEcpay: "• Payments are securely encrypted by ECPay (Green World FinTech).",
     payNoticeRefund:
-      "• Purchase notice: This plan is a digital service not supplied on a tangible medium. After payment and activation, the seven-day cooling-off period for unconditional returns does not apply, under Article 19, Paragraph 2 of the Consumer Protection Act.",
+      "• Purchase notice: This is a digital service. Immediate delivery may begin only where a statutory exception applies and after prior notice and your consent.",
     payNoticeSupport:
       "• For payment or access issues, contact support@areyoublind.game (or the site owner).",
     supportEmail: "support@areyoublind.game",
+    purchaseConsent: "I have read the purchase notice and agree that the digital service may begin immediately after payment.",
   },
 };

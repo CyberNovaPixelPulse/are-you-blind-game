@@ -24,6 +24,7 @@ export type VipModalCopy = {
   payNoticeRefund: string;
   payNoticeSupport: string;
   supportEmail: string;
+  purchaseConsent: string;
   payBtn: string;
   closeBtn: string;
   testToggle: string;
@@ -38,19 +39,21 @@ type VipModalBase = Omit<
   | "payNoticeRefund"
   | "payNoticeSupport"
   | "supportEmail"
+  | "purchaseConsent"
 >;
 
 const ZH_CN_CHECKOUT: VipCheckoutCopy = {
   planAPrice: "新台币 NT$ 19 / 月",
-  planADesc: "自建好友房、全站免广告",
+  planADesc: "自建好友房、全站免广告；单次付款使用一个月，不自动续扣",
   planBPrice: "新台币 NT$ 39 终身买断",
   planBDesc: "自建好友房、全站免广告，一次付清永久使用",
   deliveryNote: "付款成功后系统立即开通权益",
   payNoticeEcpay: "• 本服务由绿界科技 ECPay 提供安全加密付款支持",
   payNoticeRefund:
-    "• 购买须知：本方案属非以有形媒介提供的数字服务，完成付款开通后，依消保法第十九条第二项规定，不适用七天鉴赏期无条件退换货。",
+    "• 购买须知：本方案为数字服务；只有在符合法定例外、付款前已告知，且取得您事先同意后，才会于权益开通时开始提供。",
   payNoticeSupport: "• 如遇付款或权限开通问题，请联系客服信箱：support@areyoublind.game（或站长信箱）",
   supportEmail: "support@areyoublind.game",
+  purchaseConsent: "我已閱讀購買須知，並同意付款成功後立即開始提供數位服務。",
 };
 
 const VIP_COPY: Record<LanguageCode, VipModalBase> = {
@@ -767,5 +770,6 @@ export function vipCopyFor(language: LanguageCode): VipModalCopy {
     payNoticeRefund: checkout.payNoticeRefund,
     payNoticeSupport: checkout.payNoticeSupport,
     supportEmail: checkout.supportEmail,
+    purchaseConsent: checkout.purchaseConsent,
   };
 }

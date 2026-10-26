@@ -112,8 +112,9 @@ function StreakFlame({ streak, label }: { streak: number; label: string }) {
 }
 
 async function celebrate() {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const { default: confetti } = await import("canvas-confetti");
-  void confetti({ particleCount: 110, spread: 72, origin: { y: 0.62 } });
+  void confetti({ disableForReducedMotion: true, particleCount: 110, spread: 72, origin: { y: 0.62 } });
   window.setTimeout(() => {
     void confetti({ particleCount: 50, angle: 60, spread: 55, origin: { x: 0.1, y: 0.7 } });
     void confetti({ particleCount: 50, angle: 120, spread: 55, origin: { x: 0.9, y: 0.7 } });
@@ -121,6 +122,7 @@ async function celebrate() {
 }
 
 async function celebrateMilestone() {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const { default: confetti } = await import("canvas-confetti");
   void confetti({
     particleCount: 36,
@@ -365,7 +367,8 @@ export default function PlayPage() {
   const answerText = revealedAnswer || options.find((option) => option.isCorrect)?.text || "";
 
   return (
-    <div className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col p-3 font-sans text-zinc-950 md:h-auto md:min-h-screen md:overflow-visible md:p-4 md:py-10 dark:text-zinc-50">
+    <main id="main-content" tabIndex={-1} className="gm-page gm-game mx-auto flex min-h-[100dvh] w-full max-w-md flex-col p-3 font-sans text-zinc-950 md:h-auto md:min-h-screen md:overflow-visible md:p-4 md:py-10 dark:text-zinc-50">
+      <h1 className="sr-only">{t("casual")}</h1>
       <header className="mb-2 flex shrink-0 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <Link
@@ -395,7 +398,7 @@ export default function PlayPage() {
 
         {status === "empty" ? (
           <div className="py-10">
-            <h1 className="text-xl font-semibold">還沒有題目</h1>
+            <h2 className="text-xl font-semibold">還沒有題目</h2>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
               先上傳一張圖、框出特寫，再回來猜。
             </p>
@@ -427,7 +430,7 @@ export default function PlayPage() {
               }
             />
             {solved ? (
-              <p className="animate-[quiz-pop_0.4s_ease-out] absolute inset-x-4 bottom-4 rounded-full bg-emerald-500 px-4 py-2 text-center text-base font-semibold text-white shadow-lg">
+              <p className="animate-quiz-pop absolute inset-x-4 bottom-4 rounded-full bg-emerald-500 px-4 py-2 text-center text-base font-semibold text-white shadow-lg">
                 {t("correct")}
               </p>
             ) : null}
@@ -548,6 +551,6 @@ export default function PlayPage() {
           onGiveUp={goNextQuestion}
         />
       ) : null}
-    </div>
+    </main>
   );
 }

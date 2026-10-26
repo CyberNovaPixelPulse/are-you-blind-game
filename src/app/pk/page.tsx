@@ -19,6 +19,7 @@ import {
   startPkRoom,
 } from "@/lib/pk";
 import { supabase } from "@/lib/supabase";
+import { isVipEntitlementActive } from "@/lib/vip-entitlement";
 
 const ROOM_COLUMNS = "*";
 const MISSING_TABLE = "PK 資料表還沒建立，請先執行對戰 SQL。";
@@ -111,13 +112,13 @@ export default function PkLobbyPage() {
     setProfileReady(false);
     void supabase
       .from("profiles")
-      .select("is_vip")
+      .select("is_vip, vip_plan, vip_expires_at")
       .eq("id", userId)
       .maybeSingle()
       .then(
         ({ data, error: profileError }) => {
           if (!active) return;
-          setIsVip(!profileError && data?.is_vip === true);
+          setIsVip(!profileError && isVipEntitlementActive(data));
           setProfileReady(true);
         },
         () => {
@@ -409,7 +410,7 @@ export default function PkLobbyPage() {
   const showVipLock = !user || (profileReady && !isVip);
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col gap-6 px-4 py-8">
+    <main id="main-content" tabIndex={-1} className="gm-page gm-workspace mx-auto flex min-h-screen w-full max-w-md flex-col gap-6 px-4 py-8">
       <Link
         href="/"
         className="inline-flex h-9 w-fit items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 dark:border-white/15 dark:text-zinc-300"
@@ -417,16 +418,15 @@ export default function PkLobbyPage() {
         <span aria-hidden="true">←</span>
         {t.pkLobby.backHome}
       </Link>
-      <header>
-        <p className="text-sm font-semibold tracking-[0.18em] text-rose-500 uppercase">PK</p>
-        <h1 className="mt-1 text-3xl font-black">⚔️ {t.pkLobby.title}</h1>
+      <header className="gm-page-header">
+        <h1 className="mt-1 text-3xl">⚔️ {t.pkLobby.title}</h1>
         <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{t.pkLobby.subtitle}</p>
       </header>
 
       {!ready ? <p className="text-sm text-zinc-500">{t.pkLobby.checkingLogin}</p> : null}
 
       {ready && !user ? (
-        <section className="rounded-3xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950">
+        <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950">
           <p className="text-base font-medium">{t.pkLobby.loginHint}</p>
           <button
             type="button"
@@ -445,7 +445,7 @@ export default function PkLobbyPage() {
             type="button"
             disabled={busy !== null}
             onClick={() => void matchRandom()}
-            className="rounded-3xl border border-amber-400/40 bg-amber-50 p-5 text-left disabled:opacity-60 dark:border-amber-300/30 dark:bg-amber-950/40"
+            className="rounded-2xl border border-amber-400/40 bg-amber-50 p-5 text-left disabled:opacity-60 dark:border-amber-300/30 dark:bg-amber-950/40"
           >
             <h2 className="text-xl font-bold">⚡ {t.pkLobby.randomMatchTitle}</h2>
             <p className="mt-1 text-sm text-zinc-600 dark:text-amber-100/80">{t.pkLobby.randomMatchDesc}</p>
@@ -454,7 +454,7 @@ export default function PkLobbyPage() {
             type="button"
             disabled={busy !== null || (Boolean(user) && !profileReady)}
             onClick={() => void createPrivate()}
-            className={`relative rounded-3xl border p-5 text-left disabled:opacity-60 ${
+            className={`relative rounded-2xl border p-5 text-left disabled:opacity-60 ${
               showVipLock
                 ? "border-amber-300/50 bg-zinc-100 text-zinc-500 dark:border-amber-200/20 dark:bg-zinc-900 dark:text-zinc-400"
                 : "border-black/10 bg-white dark:border-white/15 dark:bg-zinc-950"
@@ -489,7 +489,7 @@ export default function PkLobbyPage() {
             </button>
           ) : null}
           <form
-            className="rounded-3xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950"
+            className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950"
             onSubmit={(event) => {
               event.preventDefault();
               void joinByCode();
@@ -499,6 +499,9 @@ export default function PkLobbyPage() {
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{t.pkLobby.joinRoomDesc}</p>
             <div className="mt-3 flex gap-2">
               <input
+                name="room-code"
+                autoComplete="off"
+                spellCheck={false}
                 value={code}
                 onChange={(event) => setCode(normalizeRoomCode(event.target.value))}
                 maxLength={4}
@@ -557,8 +560,30 @@ export default function PkLobbyPage() {
       {vipPrompt ? (
         <VipPurchaseModal
           onClose={() => setVipPrompt(false)}
-          onCheckout={() => {
-            void writeVip("enable");
+          onCheckout={async (plan) => {
+            if (!user) {
+              setVipNote("請先登入，再確認並繼續購買。");
+              void signIn();
+              return;
+            }
+            const { data } = await supabase.auth.getSession();
+            const token = data.session?.access_token;
+            if (!token) {
+              setVipNote("登入狀態已失效，請重新登入。");
+              return;
+            }
+            const response = await fetch("/api/vip/consent", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ plan, consent: true }),
+            });
+            if (!response.ok) {
+              setVipNote("購買同意記錄失敗，請稍後再試。");
+              return;
+            }
+            setVipNote(language === "en"
+              ? "Checkout is not available yet. You have not been charged and VIP access was not activated."
+              : "付款流程尚未開通；目前不會收費，也不會開通 VIP 權益。");
           }}
           onTestToggle={() => void toggleVipPreview()}
           testBusy={vipBusy}

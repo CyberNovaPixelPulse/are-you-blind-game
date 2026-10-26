@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 
 export const metadata: Metadata = {
+  ...pageMetadata("/guidelines", "出題與審查規範", "你瞎了嗎？線上猜圖遊戲的出題與審查規範。"),
   title: "出題與審查規範",
   description: "局部猜謎的 100 分制審核標準，滿 60 分才能發布。",
 };
@@ -53,8 +55,8 @@ const criteria = [
 
 export default function GuidelinesPage() {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
-      <header className="flex flex-col gap-3">
+    <main id="main-content" tabIndex={-1} className="gm-page gm-workspace gm-reading mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
+      <header className="gm-page-header flex flex-col gap-3">
         <Link
           href="/"
           aria-label="返回首頁"
@@ -64,14 +66,14 @@ export default function GuidelinesPage() {
           返回首頁
         </Link>
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-semibold tracking-tight">出題與審查規範</h1>
+          <h1 className="text-3xl">出題與審查規範</h1>
           <p className="max-w-xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
             發布前會用 100 分制看這題。滿 60 分，而且沒有安全問題，才會寫進題庫。
           </p>
         </div>
       </header>
 
-      <section className="rounded-3xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950">
+      <section className="gm-reading-block border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950">
         <p className="text-sm font-semibold">通過門檻</p>
         <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
           四項加總 0 到 100 分。60 分以上可以發布。低於 60 分會停在出題頁，並附上盲猜結果和改善建議。
@@ -82,7 +84,7 @@ export default function GuidelinesPage() {
         {criteria.map((item, index) => (
           <li
             key={item.title}
-            className="rounded-3xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950"
+            className="gm-reading-block border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950"
           >
             <div className="flex items-start justify-between gap-3">
               <h2 className="text-lg font-semibold">

@@ -555,11 +555,11 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
   }
 
   return (
-    <main
+    <main id="main-content" tabIndex={-1}
       className={
         inBattle && current
-          ? "mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden p-3"
-          : "mx-auto flex min-h-screen w-full max-w-md flex-col gap-6 px-4 py-8"
+          ? "gm-page gm-game mx-auto flex min-h-[100dvh] w-full max-w-md flex-col p-3"
+          : "gm-page gm-game mx-auto flex min-h-screen w-full max-w-md flex-col gap-6 px-4 py-8"
       }
     >
       {unsyncedCount > 0 ? <p role="status">已作答紀錄尚未同步，遊戲結果已保留。</p> : null}
@@ -689,7 +689,7 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
       ) : null}
 
       {phase === "room" && inBattle ? (
-        <section className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
+        <section className="flex flex-1 flex-col items-center justify-center gap-3 py-3">
           <header className="flex w-full shrink-0 items-center justify-between gap-3">
             <h1 className="text-base font-black">PK 猜題</h1>
             <p className="text-sm font-semibold text-zinc-500">
@@ -719,9 +719,11 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
                       type="button"
                       disabled={revealed || answerLocked}
                       onClick={() => answer(option)}
-                      className={`rounded-2xl border px-4 py-3 text-left text-base font-medium ${tone}`}
+                      className={`flex items-center justify-between gap-2 rounded-2xl border px-4 py-3 text-start text-base font-medium ${tone}`}
                     >
-                      {option.text}
+                      <span className="min-w-0 [overflow-wrap:anywhere]">{option.text}</span>
+                      {revealed && option.id === correctOptionId ? <span className="shrink-0 text-xs font-bold">正解</span>
+                        : revealed && selected ? <span className="shrink-0 text-xs font-bold">你的選擇</span> : null}
                     </button>
                   );
                 })}

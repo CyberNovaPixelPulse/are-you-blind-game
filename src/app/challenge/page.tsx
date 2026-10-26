@@ -1,5 +1,6 @@
 "use client";
 
+import { Modal } from "@/components/modal";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -25,6 +26,8 @@ const INITIAL_POOL = 10;
 const PENDING_KEY = "challenge-pending-score";
 const CHALLENGE_GAMES_KEY = "challengeGamesPlayed";
 const CHALLENGE_AD_EVERY = 3;
+type ChallengeAnswer = { questionId: string; optionId: string; elapsedMs: number };
+type PendingChallenge = { runId: string; answers: ChallengeAnswer[] };
 
 function readChallengeGames() {
   const value = Number(window.localStorage.getItem(CHALLENGE_GAMES_KEY) ?? "0");
@@ -127,28 +130,6 @@ function createChallengePool(language: string, daily: boolean) {
   });
 }
 
-function clipName(value: string) {
-  const text = [...value.trim()].slice(0, 40).join("");
-  return text || "玩家";
-}
-
-async function playerIdentity(user: User) {
-  const profile = await supabase
-    .from("profiles")
-    .select("username, avatar_url")
-    .eq("id", user.id)
-    .maybeSingle();
-  const meta = user.user_metadata ?? {};
-  const fromProfile = typeof profile.data?.username === "string" ? profile.data.username : "";
-  const fromMeta = String(meta.full_name || meta.name || "");
-  const fromEmail = user.email?.split("@")[0] ?? "";
-  const avatarValue = profile.data?.avatar_url || meta.avatar_url || meta.picture || null;
-  return {
-    username: clipName(fromProfile || fromMeta || fromEmail),
-    avatarUrl: typeof avatarValue === "string" && avatarValue.trim() ? avatarValue : null,
-  };
-}
-
 export default function ChallengePage() {
   const { language, t } = useLanguage();
   const router = useRouter();
@@ -186,6 +167,8 @@ export default function ChallengePage() {
   const poolGenRef = useRef(0);
   const clockArmedRef = useRef<string | null>(null);
   const dailyModeRef = useRef(false);
+  const runIdRef = useRef("");
+  const answersRef = useRef<ChallengeAnswer[]>([]);
 
   const phaseRef = useRef(phase);
   const endedRef = useRef(false);
@@ -216,21 +199,25 @@ export default function ChallengePage() {
     return () => window.clearTimeout(timeout);
   }, [language, pools]);
 
-  async function recordScore(totalScore: number, streakCount: number, currentUser: User) {
-    const identity = await playerIdentity(currentUser);
-    const inserted = await supabase.from("challenge_leaderboard").insert({
-      user_id: currentUser.id,
-      username: identity.username,
-      avatar_url: identity.avatarUrl,
-      total_score: totalScore,
-      streak_count: streakCount,
-    });
-    if (inserted.error) {
+  async function recordScore(payload: PendingChallenge, currentUser: User) {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token || !payload.runId) {
       setSaveState("error");
       return;
     }
+    const response = await fetch("/api/challenge/score", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: "finish", runId: payload.runId, answers: payload.answers }),
+    });
+    if (!response.ok) {
+      setSaveState("error");
+      return;
+    }
+    const result = (await response.json()) as { mode: "daily" | "endless"; challengeDate: string | null };
     setSaveState("saved");
-    const standing = await getMyRank(currentUser.id);
+    const standing = await getMyRank(currentUser.id, result.mode, result.challengeDate);
     setRank(standing?.rank ?? null);
     setLadderVersion((current) => current + 1);
   }
@@ -243,18 +230,9 @@ export default function ChallengePage() {
         if (!sessionUser || !raw) return;
         sessionStorage.removeItem(PENDING_KEY);
         try {
-          const pending = JSON.parse(raw) as { totalScore?: unknown; streak?: unknown };
-          const totalScore = pending.totalScore;
-          const streakCount = pending.streak;
-          if (
-            typeof totalScore !== "number" ||
-            typeof streakCount !== "number" ||
-            !Number.isInteger(totalScore) ||
-            !Number.isInteger(streakCount)
-          ) {
-            return;
-          }
-          void recordScore(totalScore, streakCount, sessionUser).then(() => {
+          const pending = JSON.parse(raw) as Partial<PendingChallenge>;
+          if (typeof pending.runId !== "string" || !Array.isArray(pending.answers)) return;
+          void recordScore({ runId: pending.runId, answers: pending.answers }, sessionUser).then(() => {
             setNotice("上一局分數已記入排行榜");
           });
         } catch {
@@ -319,19 +297,15 @@ export default function ChallengePage() {
       window.localStorage.setItem(CHALLENGE_GAMES_KEY, String(played));
       setChallengeGamesPlayed(played);
     }
-    const totalScore = scoreRef.current;
-    const streakCount = streakRef.current;
+    const pending: PendingChallenge = { runId: runIdRef.current, answers: answersRef.current };
     void supabase.auth.getSession().then(({ data }) => {
       const sessionUser = data.session?.user ?? null;
       if (!sessionUser) {
         setSaveState("guest");
-        sessionStorage.setItem(
-          PENDING_KEY,
-          JSON.stringify({ totalScore, streak: streakCount }),
-        );
+        sessionStorage.setItem(PENDING_KEY, JSON.stringify(pending));
         return;
       }
-      void recordScore(totalScore, streakCount, sessionUser);
+      void recordScore(pending, sessionUser);
     });
   }
 
@@ -409,7 +383,7 @@ export default function ChallengePage() {
     else showNoQuestion(result.outcome);
   }
 
-  function start() {
+  async function start() {
     answerFlow.invalidate();
     firstSubmissionRef.current = null;
     setAnswerRetry(false);
@@ -430,6 +404,30 @@ export default function ChallengePage() {
     setNotice("");
     setTimedId(null);
     setShame(null);
+    answersRef.current = [];
+    runIdRef.current = "";
+    setChallengeDate(null);
+    const mode = dailyModeRef.current ? "daily" : "endless";
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch("/api/challenge/score", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ action: "start", mode, language }),
+      });
+      if (!response.ok) setNotice("排行榜連線暫時不可用，這局仍可遊玩但不會列入排行。");
+      else {
+        const session = (await response.json()) as { runId: string; challengeDate: string | null };
+        runIdRef.current = session.runId;
+        setChallengeDate(session.challengeDate);
+      }
+    } catch {
+      setNotice("排行榜連線暫時不可用，這局仍可遊玩但不會列入排行。");
+    }
     poolGenRef.current += 1;
     if (dailyModeRef.current) activePool().reset(language);
     phaseRef.current = "play";
@@ -474,6 +472,8 @@ export default function ChallengePage() {
     }
     const result = outcome.verdict;
     record(currentId);
+    const elapsedMs = Math.max(0, Math.min(10_000, Math.floor(ROUND_MS - scoringRemaining)));
+    answersRef.current.push({ questionId: currentId, optionId: option.id, elapsedMs });
     if (roundShot.current && typeof result.answerText === "string") {
       roundShot.current.answerText = result.answerText;
     }
@@ -547,7 +547,7 @@ export default function ChallengePage() {
   function signInToSave() {
     sessionStorage.setItem(
       PENDING_KEY,
-      JSON.stringify({ totalScore: scoreRef.current, streak: streakRef.current }),
+      JSON.stringify({ runId: runIdRef.current, answers: answersRef.current }),
     );
     void supabase.auth.signInWithOAuth({
       provider: "google",
@@ -562,10 +562,10 @@ export default function ChallengePage() {
   const showBoard = phase !== "play";
 
   return (
-    <div
-      className={`mx-auto flex w-full max-w-md flex-col font-sans text-zinc-950 md:max-w-4xl dark:text-zinc-50 ${
+    <main id="main-content" tabIndex={-1}
+      className={`gm-page gm-game mx-auto flex w-full max-w-md flex-col font-sans text-zinc-950 md:max-w-4xl dark:text-zinc-50 ${
         phase === "play"
-          ? "h-[100dvh] overflow-hidden p-3 md:h-auto md:min-h-screen md:overflow-visible md:p-4 md:py-10"
+          ? "min-h-[100dvh] p-3 md:min-h-screen md:p-4 md:py-10"
           : "min-h-screen p-4 md:py-10"
       }`}
     >
@@ -608,14 +608,16 @@ export default function ChallengePage() {
 
       {unsyncedCount > 0 ? <p role="status">已作答紀錄尚未同步，遊戲結果已保留。</p> : null}
       {thinLanguage && phase === "play" ? <p className="mb-2 text-xs text-amber-700 dark:text-amber-300">{t("thinPool")}</p> : null}
-      {notice ? <p className="mb-3 text-sm text-emerald-700 dark:text-emerald-300">{notice}</p> : null}
+      {notice ? <p role="status" className="mb-3 text-sm text-emerald-700 dark:text-emerald-300">{notice}</p> : null}
 
       {phase === "idle" ? (
         <section className="flex flex-1 flex-col justify-center gap-6">
           <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-lg shadow-black/5 dark:border-white/15 dark:bg-zinc-950">
-            <p className="text-sm font-semibold tracking-[0.18em] text-amber-600 uppercase">{dailyMode ? "每日挑戰" : t.challengeMode.badge}</p>
+            <p className="text-sm font-semibold tracking-[0.18em] text-amber-600 uppercase">
+              {dailyMode ? "每日挑戰" : t.challengeMode.badge}
+            </p>
             <h1 className="mt-2 text-3xl font-black">⚡ {dailyMode ? "今日十題" : t.challengeMode.title}</h1>
-            {dailyMode ? <p className="mt-2 text-sm">全站玩家每天挑戰同一組題目。{challengeDate ? ` 日期：${challengeDate}` : ""}</p> : null}
+            {dailyMode ? <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">全站玩家每天挑戰同一組題目。{challengeDate ? ` 日期：${challengeDate}` : ""}</p> : null}
             {status === "empty" ? (
               <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">還沒有可以挑戰的題目。</p>
             ) : null}
@@ -636,7 +638,7 @@ export default function ChallengePage() {
       ) : null}
 
       {phase === "play" ? (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 py-3">
           <section className="flex w-full flex-col items-center">
             {status === "loading" && !question ? (
               <p className="py-16 text-center text-sm text-zinc-500">{t("drawing")}</p>
@@ -698,7 +700,12 @@ export default function ChallengePage() {
 
       {showBoard ? (
         <div className="mt-8">
-          <HonorCard refreshKey={ladderVersion} openRequest={ladderRequest} />
+          <HonorCard
+            refreshKey={ladderVersion}
+            openRequest={ladderRequest}
+            leaderboardMode={dailyMode ? "daily" : "endless"}
+            challengeDate={dailyMode ? challengeDate : null}
+          />
         </div>
       ) : null}
 
@@ -708,11 +715,10 @@ export default function ChallengePage() {
 
       {phase === "over" ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
-          <div
-            role="dialog"
-            aria-modal="true"
+          <Modal
+            onDismiss={() => leaveChallenge("home")}
             aria-labelledby="challenge-result-title"
-            className="w-full max-w-sm rounded-3xl bg-white p-5 text-zinc-950 shadow-xl dark:bg-zinc-950 dark:text-zinc-50"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl bg-white p-5 text-zinc-950 shadow-xl dark:bg-zinc-950 dark:text-zinc-50"
           >
             <p className="text-sm font-semibold text-zinc-500">
               {endReason === "timeout" ? "時間到" : endReason === "clear" ? "題庫清空" : "挑戰結束"}
@@ -726,10 +732,10 @@ export default function ChallengePage() {
             <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{endReason === "interrupted" ? "本次成績不會提交排行榜。" : reviewText(streak, endReason)}</p>
             {rank ? <p className="mt-3 text-sm font-semibold">目前排行第 {rank} 名</p> : null}
             {saveState === "saved" ? (
-              <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">已寫入排行榜</p>
+              <p role="status" className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">已寫入排行榜</p>
             ) : null}
             {saveState === "error" ? (
-              <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">這局分數還沒寫進排行榜</p>
+              <p role="status" className="mt-2 text-sm text-amber-700 dark:text-amber-300">這局分數還沒寫進排行榜</p>
             ) : null}
             {saveState === "guest" ? (
               <div className="mt-4 rounded-2xl bg-zinc-100 p-3 text-sm dark:bg-white/10">
@@ -778,9 +784,9 @@ export default function ChallengePage() {
                 回到首頁
               </button>
             </div>
-          </div>
+          </Modal>
         </div>
       ) : null}
-    </div>
+    </main>
   );
 }

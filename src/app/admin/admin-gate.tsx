@@ -21,7 +21,7 @@ export function AdminGate() {
   }, [state.nonce]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-6 font-sans text-zinc-950 dark:bg-black dark:text-zinc-50">
+    <main id="main-content" tabIndex={-1} className="gm-page gm-workspace gm-form-page flex min-h-screen items-center justify-center bg-zinc-50 px-6 font-sans text-zinc-950 dark:bg-black dark:text-zinc-50">
       <form
         action={submit}
         className="w-full max-w-sm rounded-2xl border border-black/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-zinc-950"

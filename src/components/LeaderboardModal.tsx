@@ -154,7 +154,7 @@ export function LeaderboardModal({
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
           {unavailable ? (
             <p className="rounded-2xl border border-white/10 px-4 py-8 text-center text-sm text-zinc-400">
               排行榜資料表還沒建立，分數會先留在這一局。

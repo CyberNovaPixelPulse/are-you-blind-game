@@ -1,17 +1,21 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { Modal } from "@/components/modal";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { useLanguage } from "@/components/language-provider";
 import { UserAvatar } from "@/components/user-avatar";
 import { supabase } from "@/lib/supabase";
 import { accountCopyFor } from "@/lib/account-copy";
+import { isVipEntitlementActive } from "@/lib/vip-entitlement";
 
 type Profile = {
   username: string;
   avatar_url: string | null;
   is_vip: boolean;
+  vip_plan: string | null;
+  vip_expires_at: string | null;
 };
 
 function metadataName(user: User): string {
@@ -32,7 +36,6 @@ function metadataAvatar(user: User): string | null {
 export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create" }) {
   const { language } = useLanguage();
   const account = accountCopyFor(language);
-  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [ready, setReady] = useState(false);
@@ -77,7 +80,7 @@ export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create
 
     void supabase
       .from("profiles")
-      .select("username, avatar_url, is_vip")
+      .select("username, avatar_url, is_vip, vip_plan, vip_expires_at")
       .eq("id", user.id)
       .maybeSingle()
       .then(({ data, error: profileError }) => {
@@ -86,6 +89,8 @@ export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create
           username: data.username,
           avatar_url: data.avatar_url,
           is_vip: data.is_vip === true,
+          vip_plan: data.vip_plan,
+          vip_expires_at: data.vip_expires_at,
         };
         setProfile(next);
         setUsername(next.username);
@@ -134,6 +139,8 @@ export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create
             username: next,
             avatar_url: metadataAvatar(user),
             is_vip: false,
+            vip_plan: null,
+            vip_expires_at: null,
           },
     );
     setOpen(false);
@@ -151,7 +158,7 @@ export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create
 
   const displayName = profile?.username || (user ? metadataName(user) : "");
   const avatarUrl = profile?.avatar_url || (user ? metadataAvatar(user) : null);
-  const isVip = profile?.is_vip === true;
+  const isVip = isVipEntitlementActive(profile);
 
   if (!ready) {
     return <div className="h-10 w-36" aria-hidden="true" />;
@@ -198,11 +205,10 @@ export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center"
           onClick={() => setOpen(false)}
         >
-          <div
-            role="dialog"
-            aria-modal="true"
+          <Modal
+            onDismiss={() => setOpen(false)}
             aria-labelledby="profile-settings-title"
-            className="w-full max-w-sm rounded-3xl bg-white p-5 text-zinc-950 shadow-xl dark:bg-zinc-950 dark:text-zinc-50"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl bg-white p-5 text-zinc-950 shadow-xl dark:bg-zinc-950 dark:text-zinc-50"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">
@@ -218,16 +224,13 @@ export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create
               </button>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                router.push("/profile");
-              }}
+            <Link
+              href="/profile"
+              onClick={() => setOpen(false)}
               className="mt-4 flex h-11 w-full items-center justify-center rounded-full bg-zinc-950 text-sm font-semibold text-white dark:bg-zinc-50 dark:text-zinc-950"
             >
               🎨 我出的題目
-            </button>
+            </Link>
 
             <div className="mt-4 flex justify-center">
               <UserAvatar
@@ -236,10 +239,22 @@ export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create
                 className={`h-20 w-20 text-2xl ${isVip ? "ring-2 ring-amber-300 shadow-[0_0_14px_rgba(251,191,36,0.9)]" : ""}`}
               />
             </div>
+            {isVip ? (
+              <p className="mt-3 text-center text-sm font-semibold text-amber-600 dark:text-amber-300">
+                {profile?.vip_plan === "lifetime"
+                  ? "VIP 終身權益"
+                  : profile?.vip_plan === "monthly" && profile.vip_expires_at
+                    ? `VIP 有效至 ${new Date(profile.vip_expires_at).toLocaleDateString()}`
+                    : "VIP 權益已啟用"}
+              </p>
+            ) : null}
 
             <label className="mt-4 flex flex-col gap-1 text-sm font-medium">
               暱稱
               <input
+                name="username"
+                autoComplete="nickname"
+                spellCheck={false}
                 value={username}
                 maxLength={40}
                 onChange={(event) => setUsername(event.target.value)}
@@ -270,7 +285,7 @@ export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create
                 登出
               </button>
             </div>
-          </div>
+          </Modal>
         </div>
       ) : null}
     </div>

@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
 
 export const metadata: Metadata = {
+  ...pageMetadata("/terms", "服務條款與免責聲明", "你瞎了嗎？線上猜圖遊戲的服務條款與免責聲明。"),
   title: "服務條款與免責聲明",
   description: "AreYouBlind 的服務性質、著作權通知、出題守則、廣告 Cookie 與數位商品退款說明。",
 };
@@ -43,17 +45,17 @@ const sections = [
     id: "refund",
     title: "5. 數位商品購買與退款政策（Refund Policy）",
     paragraphs: [
-      "VIP 方案以新台幣計價。月費方案為新台幣 NT$ 19 / 月，按付款週期持續提供自建好友房與全站免廣告。終身買斷方案為新台幣 NT$ 39，一次付清後永久提供相同權益，不會按月再收費。",
+      "VIP 方案以新台幣計價。月費方案為新台幣 NT$ 19，可使用自建好友房與全站免廣告一個月；每次付款涵蓋一個月，不自動續扣，若要繼續使用需再次購買。終身買斷方案為新台幣 NT$ 39，一次付清後永久提供相同權益，不會按月再收費。",
       "付款由綠界科技 ECPay 提供安全加密處理。付款成功後，系統立即開通對應權益。這是線上自動交付，不另寄送實體商品或有形媒介。",
-      "本方案屬非以有形媒介提供之數位服務。完成付款並開通權益後，依消費者保護法第十九條第二項規定，不適用七天鑑賞期無條件退換貨。",
+      "本方案為非以有形媒介提供之數位服務。只有在符合「通訊交易解除權合理例外情事適用準則」所定條件、付款前已明確告知，且取得消費者事先同意後，本站才會於付款成功後立即開始提供服務；此時的解除權依消費者保護法第十九條第二項及相關準則辦理。是否適用例外須依實際服務內容與法規判斷，付款或開通異常仍可聯繫客服查核。",
     ],
   },
 ] as const;
 
 export default function TermsPage() {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
-      <header className="flex flex-col gap-3">
+    <main id="main-content" tabIndex={-1} className="gm-page gm-workspace gm-reading mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
+      <header className="gm-page-header flex flex-col gap-3">
         <Link
           href="/"
           aria-label="返回首頁"
@@ -64,7 +66,7 @@ export default function TermsPage() {
         </Link>
         <div className="flex flex-col gap-2">
           <p className="text-sm font-semibold tracking-[0.18em] text-zinc-500 uppercase">AreYouBlind</p>
-          <h1 className="text-3xl font-black tracking-tight">服務條款與免責聲明</h1>
+          <h1 className="text-3xl">服務條款與免責聲明</h1>
           <p className="max-w-xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
             使用本站的猜題、出題與挑戰功能，即表示你已閱讀並同意下列說明。
           </p>
@@ -75,7 +77,7 @@ export default function TermsPage() {
         <section
           key={section.id}
           id={section.id}
-          className="rounded-3xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950"
+          className="gm-reading-block border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950"
         >
           <h2 className="text-lg font-bold">{section.title}</h2>
           <div className="mt-3 flex flex-col gap-3">

@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { isLanguageCode, languageByCode, type LanguageCode } from "@/lib/languages";
+import { guardAuthenticatedAiRequest, readJsonLimited } from "@/lib/api-protection";
 
 type GeneratedOption = {
   text: string;
@@ -80,6 +81,29 @@ These limits replace the character limits above: option text at most ${limits.te
 
 const MAX_AI_IMAGE_BYTES = 400 * 1024;
 
+const EQUIVALENT_ANSWER_GROUPS = [
+  ["墨鏡", "太陽眼鏡", "太阳眼镜", "遮陽鏡", "遮阳镜", "sunglasses"],
+  ["腳踏車", "自行車", "单车", "單車", "bicycle", "bike"],
+  ["手機", "智能手機", "智能手机", "行動電話", "移动电话", "mobile phone", "cellphone", "smartphone"],
+  ["番茄", "西紅柿", "西红柿", "tomato"],
+  ["馬鈴薯", "土豆", "potato"],
+  ["玉米", "粟米", "corn", "maize"],
+  ["地瓜", "番薯", "紅薯", "红薯", "sweet potato"],
+  ["可樂", "可口可樂", "可口可乐", "cola", "coke"],
+  ["洋芋片", "薯片", "potato chips", "crisps"],
+  ["計程車", "出租車", "出租车", "taxi", "cab"],
+  ["公車", "公交車", "公交车", "巴士", "bus"],
+].map((group) => ({ canonical: group[0], aliases: [...group].sort((a, b) => b.length - a.length) }));
+
+function canonicalAnswer(value: string) {
+  let text = value.normalize("NFKC").toLocaleLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
+  for (const group of EQUIVALENT_ANSWER_GROUPS) {
+    const aliases = group.aliases.map((alias) => alias.normalize("NFKC").toLocaleLowerCase().replace(/[\s\p{P}\p{S}]/gu, ""));
+    for (const alias of aliases) text = text.replaceAll(alias, group.canonical);
+  }
+  return text;
+}
+
 type AiImage = {
   mime: "image/jpeg" | "image/png" | "image/webp";
   base64: string;
@@ -157,7 +181,8 @@ function readPayload(value: unknown, correctAnswer: string, language: LanguageCo
   if (!correctTaunt) return null;
 
   const parsed: GeneratedOption[] = [];
-  const seen = new Set<string>([correctAnswer.toLowerCase()]);
+  const correctKey = canonicalAnswer(correctAnswer);
+  const seen = new Set<string>([correctKey]);
   for (const item of options) {
     if (!item || typeof item !== "object") continue;
     const text = (item as { text?: unknown }).text;
@@ -165,8 +190,8 @@ function readPayload(value: unknown, correctAnswer: string, language: LanguageCo
     if (typeof text !== "string" || typeof taunt !== "string") continue;
     const trimmedText = clip(text, limits.text);
     const trimmedTaunt = clip(taunt, limits.taunt);
-    const key = trimmedText.toLowerCase();
-    if (!trimmedText || !trimmedTaunt || seen.has(key)) continue;
+    const key = canonicalAnswer(trimmedText);
+    if (!trimmedText || !trimmedTaunt || seen.has(key) || key.includes(correctKey) || correctKey.includes(key)) continue;
     seen.add(key);
     parsed.push({ text: trimmedText, taunt: trimmedTaunt });
     if (parsed.length === 3) break;
@@ -176,6 +201,15 @@ function readPayload(value: unknown, correctAnswer: string, language: LanguageCo
 }
 
 export async function POST(request: Request) {
+  const guard = await guardAuthenticatedAiRequest(request, { perMinute: 6, perHour: 30 });
+  if (!guard.ok) {
+    return Response.json({ message: guard.message }, {
+      status: guard.status,
+      headers: guard.status === 429 ? { "Retry-After": "60" } : undefined,
+    });
+  }
+  const contentLength = Number(request.headers.get("content-length") ?? 0);
+  if (contentLength > 600_000) return Response.json({ message: "圖片或請求太大" }, { status: 413 });
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return Response.json({ message: "尚未設定 OPENAI_API_KEY" }, { status: 500 });
@@ -184,20 +218,19 @@ export async function POST(request: Request) {
   let correctAnswer = "";
   let language: LanguageCode = "zh-TW";
   let image: AiImage | null = null;
-  try {
-    const body = (await request.json()) as {
+  const body = await readJsonLimited<{
       correctAnswer?: unknown;
       language?: unknown;
       imageBase64?: unknown;
-    };
-    correctAnswer = typeof body.correctAnswer === "string" ? body.correctAnswer.trim() : "";
-    if (typeof body.language === "string" && isLanguageCode(body.language)) {
-      language = body.language;
-    }
-    image = readAiImage(body.imageBase64);
-  } catch {
+    }>(request, 600_000);
+  if (!body) {
     return Response.json({ message: "請提供正解名稱" }, { status: 400 });
   }
+  correctAnswer = typeof body.correctAnswer === "string" ? body.correctAnswer.trim() : "";
+  if (typeof body.language === "string" && isLanguageCode(body.language)) {
+    language = body.language;
+  }
+  image = readAiImage(body.imageBase64);
   if (correctAnswer.length < 1 || correctAnswer.length > 120) {
     return Response.json({ message: "正解名稱需要 1 到 120 個字" }, { status: 400 });
   }

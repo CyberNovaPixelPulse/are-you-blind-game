@@ -1,6 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { SkipToContent } from "@/components/skip-to-content";
 import { LanguageProvider } from "@/components/language-provider";
+import { siteDescription, siteName, siteUrl } from "@/lib/seo";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,8 +16,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "局部猜謎",
-  description: "看特寫，猜這張圖是什麼",
+  metadataBase: siteUrl,
+  title: { default: `${siteName}｜線上猜圖遊戲`, template: `%s｜${siteName}` },
+  description: siteDescription,
+  verification: { google: process.env.GOOGLE_SITE_VERIFICATION || undefined },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -32,7 +43,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         />
       </head>
       <body className="min-h-full flex flex-col">
-        <LanguageProvider>{children}</LanguageProvider>
+        <LanguageProvider><SkipToContent />{children}</LanguageProvider>
       </body>
     </html>
   );

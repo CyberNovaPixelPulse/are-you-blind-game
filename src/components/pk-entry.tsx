@@ -36,7 +36,7 @@ export function PkEntry() {
         type="button"
         disabled={pending}
         onClick={() => void enter()}
-        className="flex w-full flex-col gap-2 rounded-3xl border border-rose-400/40 bg-rose-50 p-5 text-left shadow-lg shadow-rose-500/10 transition-transform hover:-translate-y-0.5 active:scale-[0.99] disabled:opacity-60 dark:border-rose-300/30 dark:bg-rose-950/40"
+        className="gm-mode border-s-4 border-s-rose-500 flex w-full flex-col gap-2 rounded-2xl border border-rose-400/40 bg-rose-50 p-5 text-left transition-colors hover:border-rose-500 active:scale-[0.99] disabled:opacity-60 dark:border-rose-300/30 dark:bg-rose-950/40"
       >
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-xl font-bold">⚔️ {t("pk")}</h2>

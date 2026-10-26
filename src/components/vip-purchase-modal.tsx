@@ -1,5 +1,6 @@
 "use client";
 
+import { Modal } from "@/components/modal";
 import { useId, useState } from "react";
 import { useLanguage } from "@/components/language-provider";
 
@@ -34,8 +35,10 @@ export function VipPurchaseModal({
 }) {
   const titleId = useId();
   const [plan, setPlan] = useState<PlanId>("monthly");
+  const [hasConsented, setHasConsented] = useState(false);
   const { t } = useLanguage();
   const copy = t.vipModal;
+
   const perks = [
     { icon: "👥", title: copy.privilege1Title, detail: copy.privilege1Desc },
     { icon: "🚫", title: copy.privilege2Title, detail: copy.privilege2Desc },
@@ -49,11 +52,10 @@ export function VipPurchaseModal({
       role="presentation"
       onClick={onClose}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
+      <Modal
+        onDismiss={onClose}
         aria-labelledby={titleId}
-        className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl border border-amber-300/40 bg-zinc-950 p-6 text-amber-50 shadow-[0_0_40px_rgba(251,191,36,0.28)]"
+        className="overscroll-contain max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl border border-amber-300/40 bg-zinc-950 p-6 text-amber-50 shadow-[0_0_40px_rgba(251,191,36,0.28)]"
         onClick={(event) => event.stopPropagation()}
       >
         <h2 id={titleId} className="text-2xl font-black text-amber-100">
@@ -81,7 +83,7 @@ export function VipPurchaseModal({
           </legend>
           <div className="mt-2 flex flex-col gap-2">
             <label
-              className={`relative cursor-pointer rounded-2xl border p-4 ${
+              className={`relative cursor-pointer focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-amber-300 rounded-2xl border p-4 ${
                 plan === "monthly"
                   ? "border-amber-300 bg-amber-400/15 shadow-[0_0_18px_rgba(251,191,36,0.25)]"
                   : "border-white/15 bg-white/5"
@@ -92,7 +94,7 @@ export function VipPurchaseModal({
                 name="vip-plan"
                 value="monthly"
                 checked={plan === "monthly"}
-                onChange={() => setPlan("monthly")}
+                onChange={() => { setPlan("monthly"); setHasConsented(false); }}
                 className="sr-only"
               />
               <span className="absolute top-3 right-3 rounded-full bg-amber-300 px-2 py-0.5 text-[11px] font-black text-zinc-950">
@@ -103,7 +105,7 @@ export function VipPurchaseModal({
               <p className="mt-1 text-sm text-amber-50/75">{copy.planADesc}</p>
             </label>
             <label
-              className={`cursor-pointer rounded-2xl border p-4 ${
+              className={`cursor-pointer focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-amber-300 rounded-2xl border p-4 ${
                 plan === "lifetime"
                   ? "border-amber-300 bg-amber-400/15 shadow-[0_0_18px_rgba(251,191,36,0.25)]"
                   : "border-white/15 bg-white/5"
@@ -114,7 +116,7 @@ export function VipPurchaseModal({
                 name="vip-plan"
                 value="lifetime"
                 checked={plan === "lifetime"}
-                onChange={() => setPlan("lifetime")}
+                onChange={() => { setPlan("lifetime"); setHasConsented(false); }}
                 className="sr-only"
               />
               <p className="text-xs font-bold tracking-wide text-amber-200">{copy.planBTitle}</p>
@@ -125,10 +127,21 @@ export function VipPurchaseModal({
           <p className="mt-3 text-sm font-medium leading-6 text-amber-100">{copy.deliveryNote}</p>
         </fieldset>
 
+        <label className="mt-4 flex cursor-pointer items-start gap-2 text-xs leading-5 text-amber-50/80">
+          <input
+            type="checkbox"
+            checked={hasConsented}
+            onChange={(event) => setHasConsented(event.target.checked)}
+            className="mt-1 h-4 w-4 shrink-0 accent-amber-300"
+          />
+          <span>{copy.purchaseConsent}</span>
+        </label>
+
         <button
           type="button"
           onClick={() => onCheckout?.(plan)}
-          className="mt-5 flex h-12 w-full items-center justify-center rounded-full bg-amber-300 text-base font-black text-zinc-950 shadow-[0_0_24px_rgba(251,191,36,0.45)]"
+          disabled={!hasConsented}
+          className="mt-5 flex h-12 w-full items-center justify-center rounded-full bg-amber-300 text-base font-black text-zinc-950 shadow-[0_0_24px_rgba(251,191,36,0.45)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {copy.payBtn}
         </button>
@@ -155,7 +168,7 @@ export function VipPurchaseModal({
           {testBusy ? copy.testBusy : copy.testToggle}
         </button>
         {testNote ? <p className="mt-2 text-center text-xs text-amber-300">{testNote}</p> : null}
-      </div>
+      </Modal>
     </div>
   );
 }

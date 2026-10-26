@@ -31,6 +31,10 @@ function statusLabel(status: string) {
   return "審核中";
 }
 
+function readLegacyAnswer(options: unknown) {
+  return readStoredOptions(options).find((option) => option.isCorrect)?.text.trim() || "尚未填寫正解";
+}
+
 function statusClass(status: string) {
   if (status === "active") return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300";
   if (status === "hidden") return "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300";
@@ -47,25 +51,20 @@ function formatDate(value: string) {
   }).format(date);
 }
 
-function readAnswer(options: unknown) {
-  const correct = readStoredOptions(options).find((option) => option.isCorrect);
-  return correct?.text.trim() || "尚未填寫正解";
-}
-
 function readCount(value: unknown) {
   const count = typeof value === "number" ? value : Number(value);
   if (!Number.isInteger(count) || count < 0) return 0;
   return count;
 }
 
-function readWorks(rows: Record<string, unknown>[], viewsAvailable: boolean): Work[] {
+function readWorks(rows: Record<string, unknown>[], viewsAvailable: boolean, answers: Map<string, string>): Work[] {
   return rows.flatMap((row) => {
     if (typeof row.id !== "string" || typeof row.crop_image_path !== "string") return [];
     return [
       {
         id: row.id,
         cropImagePath: row.crop_image_path,
-        answer: readAnswer(row.options),
+        answer: answers.get(row.id) || readLegacyAnswer(row.options),
         createdAt: typeof row.created_at === "string" ? row.created_at : "",
         status: typeof row.status === "string" ? row.status : "review",
         viewCount: viewsAvailable ? readCount(row.view_count) : 0,
@@ -139,8 +138,20 @@ export function MyQuestions() {
         setStatus("error");
         return;
       }
+      const ids = rows.flatMap((row) => typeof row.id === "string" ? [row.id] : []);
+      const answersResult = ids.length
+        ? await supabase.rpc("get_my_question_answers", { p_question_ids: ids })
+        : { data: [], error: null };
+      const answers = new Map<string, string>(
+        (answersResult.data ?? []).flatMap((row: { question_id: string; answer: string }) =>
+          typeof row.question_id === "string" && typeof row.answer === "string"
+            ? [[row.question_id, row.answer] as [string, string]]
+            : [],
+        ),
+      );
+      if (!active) return;
       setViewsReady(viewsAvailable);
-      setWorks(readWorks(rows, viewsAvailable));
+      setWorks(readWorks(rows, viewsAvailable, answers));
       setStatus("ready");
     })();
 
@@ -154,7 +165,7 @@ export function MyQuestions() {
   const hottest = works.reduce((max, work) => Math.max(max, work.viewCount), 0);
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 px-4 py-8">
+    <main id="main-content" tabIndex={-1} className="gm-page gm-workspace mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 px-4 py-8">
       <div className="flex items-center justify-between gap-3">
         <Link
           href="/"
@@ -165,16 +176,15 @@ export function MyQuestions() {
         </Link>
       </div>
 
-      <header className="flex flex-col gap-2">
-        <p className="text-sm font-semibold tracking-[0.18em] text-zinc-500 uppercase">Creator</p>
-        <h1 className="text-3xl font-black tracking-tight">我出的題目</h1>
+      <header className="gm-page-header flex flex-col gap-2">
+        <h1 className="text-3xl">我出的題目</h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">看看自己的題目有沒有被抽到、被看過幾次。</p>
       </header>
 
       {!ready || status === "loading" ? <p className="text-sm text-zinc-500">正在讀取你的題目…</p> : null}
 
       {ready && !user ? (
-        <section className="rounded-3xl border border-black/10 bg-white p-6 dark:border-white/15 dark:bg-zinc-950">
+        <section className="rounded-2xl border border-black/10 bg-white p-6 dark:border-white/15 dark:bg-zinc-950">
           <p className="text-base font-medium">登入後就能查看自己出的題目與曝光成效。</p>
           <Link
             href="/"
@@ -192,7 +202,7 @@ export function MyQuestions() {
       ) : null}
 
       {status === "ready" && user && works.length === 0 ? (
-        <section className="rounded-3xl border border-dashed border-black/15 bg-white p-6 text-center dark:border-white/20 dark:bg-zinc-950">
+        <section className="rounded-2xl border border-dashed border-black/15 bg-white p-6 text-center dark:border-white/20 dark:bg-zinc-950">
           <p className="text-lg font-semibold">你還沒出過題，立即去出題秀操作！</p>
           <Link
             href="/create"
@@ -206,15 +216,15 @@ export function MyQuestions() {
       {status === "ready" && user && works.length > 0 ? (
         <>
           <section className="grid gap-3 sm:grid-cols-3" aria-label="創作者數據">
-            <article className="rounded-3xl border border-black/10 bg-white p-4 dark:border-white/15 dark:bg-zinc-950">
+            <article className="rounded-2xl border border-black/10 bg-white p-4 dark:border-white/15 dark:bg-zinc-950">
               <p className="text-sm text-zinc-500">總出題數</p>
               <p className="mt-1 text-3xl font-black">{works.length} 道</p>
             </article>
-            <article className="rounded-3xl border border-black/10 bg-white p-4 dark:border-white/15 dark:bg-zinc-950">
+            <article className="rounded-2xl border border-black/10 bg-white p-4 dark:border-white/15 dark:bg-zinc-950">
               <p className="text-sm text-zinc-500">總曝光 / 瀏覽次數</p>
               <p className="mt-1 text-3xl font-black">👁️ {totalViews.toLocaleString("zh-TW")} 次</p>
             </article>
-            <article className="rounded-3xl border border-black/10 bg-white p-4 dark:border-white/15 dark:bg-zinc-950">
+            <article className="rounded-2xl border border-black/10 bg-white p-4 dark:border-white/15 dark:bg-zinc-950">
               <p className="text-sm text-zinc-500">平均瀏覽量</p>
               <p className="mt-1 text-3xl font-black">{averageViews.toLocaleString("zh-TW")} 次</p>
               {hottest > 0 ? (
@@ -235,7 +245,7 @@ export function MyQuestions() {
             {works.map((work) => (
               <li
                 key={work.id}
-                className="flex gap-4 rounded-3xl border border-black/10 bg-white p-3 dark:border-white/15 dark:bg-zinc-950"
+                className="flex gap-4 rounded-2xl border border-black/10 bg-white p-3 dark:border-white/15 dark:bg-zinc-950"
               >
                 <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-zinc-900">
                   <Image

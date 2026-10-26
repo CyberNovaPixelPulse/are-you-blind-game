@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLanguage } from "@/components/language-provider";
 import { accountCopyFor } from "@/lib/account-copy";
 import { supabase } from "@/lib/supabase";
@@ -15,6 +15,8 @@ export default function ResetPasswordPage() {
   const [confirmation, setConfirmation] = useState("");
   const [pending, setPending] = useState(false);
   const [sent, setSent] = useState(false);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const confirmationRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<"expired" | "sendError" | "updateError" | "short" | "mismatch" | null>(null);
 
   useEffect(() => {
@@ -37,8 +39,8 @@ export default function ResetPasswordPage() {
     if (pending) return;
     setError(null);
     setSent(false);
-    if (mode === "update" && password.length < 6) { setError("short"); return; }
-    if (mode === "update" && password !== confirmation) { setError("mismatch"); return; }
+    if (mode === "update" && password.length < 6) { setError("short"); passwordRef.current?.focus(); return; }
+    if (mode === "update" && password !== confirmation) { setError("mismatch"); confirmationRef.current?.focus(); return; }
     setPending(true);
     try {
       if (mode === "request") {
@@ -59,9 +61,9 @@ export default function ResetPasswordPage() {
 
   const fieldClass = "min-h-11 rounded-xl border border-black/20 bg-transparent px-3 py-2 dark:border-white/25";
   return (
-    <main lang={lang} dir={lang === "ar" ? "rtl" : "ltr"} className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-10">
+    <main id="main-content" tabIndex={-1} lang={lang} dir={lang === "ar" ? "rtl" : "ltr"} className="gm-page gm-workspace gm-form-page mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-10">
       <Link href="/create" className="inline-flex min-h-11 w-fit items-center underline underline-offset-4">{copy.back}</Link>
-      <h1 className="text-3xl font-bold">{copy.title}</h1>
+      <h1 className="text-3xl">{copy.title}</h1>
       {mode === "loading" ? <p role="status">{copy.loading}</p> : mode === "done" ? (
         <p role="status">{copy.done}</p>
       ) : (
@@ -69,18 +71,18 @@ export default function ResetPasswordPage() {
           {mode === "request" ? <>
             <p>{copy.hint}</p>
             <label className="flex flex-col gap-2">{copy.email}
-              <input type="email" autoComplete="email" required value={email} onChange={event => setEmail(event.target.value)} disabled={pending} className={fieldClass} />
+              <input type="email" name="email" spellCheck={false} autoComplete="email" required value={email} onChange={event => setEmail(event.target.value)} disabled={pending} className={fieldClass} />
             </label>
           </> : <>
             <p id="password-hint">{copy.passwordHint}</p>
             <label className="flex flex-col gap-2">{copy.password}
-              <input type="password" autoComplete="new-password" required minLength={6} aria-describedby="password-hint" value={password} onChange={event => setPassword(event.target.value)} disabled={pending} className={fieldClass} />
+              <input ref={passwordRef} name="new-password" type="password" autoComplete="new-password" required minLength={6} aria-invalid={error === "short"} aria-describedby={error === "short" ? "password-hint reset-error" : "password-hint"} value={password} onChange={event => setPassword(event.target.value)} disabled={pending} className={fieldClass} />
             </label>
             <label className="flex flex-col gap-2">{copy.confirm}
-              <input type="password" autoComplete="new-password" required minLength={6} value={confirmation} onChange={event => setConfirmation(event.target.value)} disabled={pending} className={fieldClass} />
+              <input ref={confirmationRef} name="confirm-password" type="password" autoComplete="new-password" required minLength={6} aria-invalid={error === "mismatch"} aria-describedby={error === "mismatch" ? "reset-error" : undefined} value={confirmation} onChange={event => setConfirmation(event.target.value)} disabled={pending} className={fieldClass} />
             </label>
           </>}
-          {error ? <p role="alert">{copy[error]}</p> : null}
+          {error ? <p id="reset-error" role="alert">{copy[error]}</p> : null}
           <p role="status" className="empty:hidden">{pending ? copy.working : sent ? copy.sent : ""}</p>
           <button type="submit" disabled={pending} className="min-h-11 rounded-full bg-foreground px-4 py-3 font-semibold text-background disabled:opacity-50">
             {mode === "request" ? copy.send : copy.save}

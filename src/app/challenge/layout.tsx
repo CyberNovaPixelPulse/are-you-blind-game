@@ -1,9 +1,6 @@
-import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "挑戰模式",
-  description: "10 秒一題，答錯或超時就結束",
-};
+export const metadata = pageMetadata("/challenge", "限時猜圖挑戰", "看局部特寫猜物件，每題限時 10 秒；也能參加每日十題，與全站玩家比較分數。");
 
 export default function ChallengeLayout({ children }: LayoutProps<"/challenge">) {
   return children;

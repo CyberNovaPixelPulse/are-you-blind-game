@@ -1,9 +1,6 @@
-import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "多人 PK",
-  description: "隨機 1v1，或開 4 碼房號跟朋友一起猜",
-};
+export const metadata = pageMetadata("/pk", "多人猜圖 PK", "與朋友一起玩線上猜圖遊戲：隨機 1v1 對戰，或建立 4 碼房號邀請朋友比拼眼力。");
 
 export default function PkLayout({ children }: LayoutProps<"/pk">) {
   return children;

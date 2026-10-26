@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { useLanguage } from "@/components/language-provider";
 import { LeaderboardModal, PlayerAvatar } from "@/components/LeaderboardModal";
-import { loadLadder, type LeaderboardEntry } from "@/lib/leaderboard";
+import { loadLadder, type LeaderboardEntry, type LeaderboardMode } from "@/lib/leaderboard";
 import { supabase } from "@/lib/supabase";
 
 function rankTitle(rank: number, prefix: string, suffix: string) {
@@ -29,10 +29,14 @@ export function HonorCard({
   refreshKey = 0,
   openRequest = 0,
   showChallengeLink = false,
+  leaderboardMode = "endless",
+  challengeDate,
 }: {
   refreshKey?: number;
   openRequest?: number;
   showChallengeLink?: boolean;
+  leaderboardMode?: LeaderboardMode;
+  challengeDate?: string | null;
 }) {
   const { t } = useLanguage();
   const [user, setUser] = useState<User | null>(null);
@@ -47,7 +51,7 @@ export function HonorCard({
     let active = true;
     void supabase.auth.getSession().then(async ({ data }) => {
       const sessionUser = data.session?.user ?? null;
-      const ladder = await loadLadder(sessionUser?.id ?? null, 50);
+      const ladder = await loadLadder(sessionUser?.id ?? null, 50, leaderboardMode, challengeDate);
       if (!active) return;
       setUser(sessionUser);
       setEntries(ladder.entries);
@@ -58,7 +62,7 @@ export function HonorCard({
     return () => {
       active = false;
     };
-  }, [refreshKey]);
+  }, [refreshKey, leaderboardMode, challengeDate]);
 
   useEffect(() => {
     if (openRequest > 0) setOpen(true);
@@ -77,11 +81,10 @@ export function HonorCard({
 
   return (
     <>
-      <section className="relative overflow-hidden rounded-3xl border border-amber-300/40 bg-zinc-950 p-4 text-amber-50 shadow-[0_0_28px_rgba(251,191,36,0.28)] sm:col-span-2">
+      <section className="relative overflow-hidden rounded-2xl border border-amber-300/40 bg-zinc-950 p-4 text-amber-50 sm:col-span-2">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.35),transparent_52%)]" />
         <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold tracking-[0.18em] text-amber-300/90 uppercase">Honor</p>
             <h2 className="mt-1 text-lg font-black text-amber-100">🏆 {t.honorCard.title}</h2>
             {!ready ? <p className="mt-2 text-sm text-amber-100/70">{t.honorCard.loading}</p> : null}
             {ready && !user ? (

@@ -1,5 +1,7 @@
 "use client";
 
+import { useBoardFilters } from "@/app/admin/use-board-filters";
+import { Modal } from "@/components/modal";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
@@ -270,12 +272,7 @@ export function AdminBoard({
   const [saveConfirm, setSaveConfirm] = useState(false);
   const [leaveConfirm, setLeaveConfirm] = useState(false);
   const toast = useSyncExternalStore(subscribeToast, readStoredToast, () => "");
-  const [sortKey, setSortKey] = useState<
-    "reports" | "newest" | "oldest" | "score-desc" | "score-asc"
-  >("reports");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "hidden">("all");
-  const [difficultyFilter, setDifficultyFilter] = useState<"all" | Difficulty>("all");
-  const [languageFilter, setLanguageFilter] = useState<"all" | LanguageCode>("all");
+  const { sortKey, setSortKey, statusFilter, setStatusFilter, difficultyFilter, setDifficultyFilter, languageFilter, setLanguageFilter } = useBoardFilters();
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [clearedReports, setClearedReports] = useState<Set<string>>(new Set());
   const [statusOverride, setStatusOverride] = useState<Record<string, "active" | "hidden">>({});
@@ -835,13 +832,13 @@ export function AdminBoard({
   }
 
   return (
-    <main
-      className={`min-h-screen bg-zinc-100 px-6 py-8 font-sans text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50 ${
+    <main id="main-content" tabIndex={-1}
+      className={`gm-page gm-admin gm-form-page min-h-screen bg-zinc-100 px-6 py-8 font-sans text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50 ${
         checkedQuestions.length > 0 ? "pb-28" : ""
       }`}
     >
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <header className="flex flex-wrap items-end justify-between gap-4">
+        <header className="gm-page-header flex flex-wrap items-end justify-between gap-4">
           <div>
             <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50">
               回猜題首頁
@@ -903,20 +900,25 @@ export function AdminBoard({
               作者 Email
               <input
                 type="email"
+                name="email"
+                autoComplete="email"
+                spellCheck={false}
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
-                className="h-11 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none dark:border-white/15"
+                className="h-11 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-white/15"
               />
             </label>
             <label className="flex min-w-40 flex-1 flex-col gap-1 text-sm font-medium">
               密碼
               <input
                 type="password"
+                name="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
-                className="h-11 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none dark:border-white/15"
+                className="h-11 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-white/15"
               />
             </label>
             <button
@@ -926,7 +928,7 @@ export function AdminBoard({
             >
               {authPending ? "登入中…" : "登入後才能改題"}
             </button>
-            {authError ? <p className="w-full text-sm text-red-600">{authError}</p> : null}
+            {authError ? <p role="alert" className="w-full text-sm text-red-600">{authError}</p> : null}
           </form>
         ) : null}
 
@@ -937,7 +939,7 @@ export function AdminBoard({
               <select
                 value={sortKey}
                 onChange={(event) => setSortKey(event.target.value as typeof sortKey)}
-                className="h-11 min-w-64 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none dark:border-white/15"
+                className="h-11 min-w-64 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-white/15"
               >
                 <option value="reports">🚨 被檢舉次數（高到低）</option>
                 <option value="newest">🕒 建立時間（最新到最舊）</option>
@@ -951,7 +953,7 @@ export function AdminBoard({
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
-                className="h-11 min-w-44 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none dark:border-white/15"
+                className="h-11 min-w-44 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-white/15"
               >
                 <option value="all">全部</option>
                 <option value="active">已上架 (active)</option>
@@ -965,7 +967,7 @@ export function AdminBoard({
                 onChange={(event) =>
                   setDifficultyFilter(event.target.value as typeof difficultyFilter)
                 }
-                className="h-11 min-w-36 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none dark:border-white/15"
+                className="h-11 min-w-36 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-white/15"
               >
                 <option value="all">全部</option>
                 {DIFFICULTIES.map((level) => (
@@ -983,7 +985,7 @@ export function AdminBoard({
                   const next = event.target.value;
                   if (next === "all" || isLanguageCode(next)) setLanguageFilter(next);
                 }}
-                className="h-11 min-w-64 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none dark:border-white/15"
+                className="h-11 min-w-64 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-white/15"
               >
                 <option value="all">全部語言 (All Languages)</option>
                 {SUPPORTED_LANGUAGES.map((item) => (
@@ -1092,11 +1094,10 @@ export function AdminBoard({
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md"
           onClick={requestClose}
         >
-          <div
-            role="dialog"
-            aria-modal="true"
+          <Modal
+            onDismiss={requestClose}
             aria-labelledby="review-title"
-            className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-white/10 bg-zinc-950 p-5 text-zinc-50 shadow-2xl"
+            className="overscroll-contain max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-white/10 bg-zinc-950 p-5 text-zinc-50 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             {(() => {
@@ -1108,7 +1109,7 @@ export function AdminBoard({
               const shownDifficulty = editing && draft ? draft.difficulty : question.difficulty;
               const shownStatus = editing && draft ? draft.status : question.status;
               const fieldClass =
-                "mt-1 w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm font-normal text-zinc-50 outline-none";
+                "mt-1 w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm font-normal text-zinc-50 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-300";
               return (
                 <>
                   <div className="flex items-start justify-between gap-3">
@@ -1254,9 +1255,11 @@ export function AdminBoard({
 
                   <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
-                      <p className="text-sm text-zinc-400">難度</p>
+                      <p id="review-difficulty-label" className="text-sm text-zinc-400">難度</p>
                       {editing && draft ? (
                         <select
+                          aria-labelledby="review-difficulty-label"
+                          name="difficulty"
                           value={draft.difficulty}
                           onChange={(event) => {
                             const value = event.target.value;
@@ -1390,7 +1393,7 @@ export function AdminBoard({
                       {pending ? "診斷中…" : "🤖 AI 重新診斷"}
                     </button>
                     {errors[question.id] ? (
-                      <p className="mt-2 text-sm text-red-300">{errors[question.id]}</p>
+                      <p role="alert" className="mt-2 text-sm text-red-300">{errors[question.id]}</p>
                     ) : null}
                   </section>
 
@@ -1424,7 +1427,7 @@ export function AdminBoard({
                   </div>
 
                   {errors[question.id] ? (
-                    <p className="mt-4 text-sm text-red-300">{errors[question.id]}</p>
+                    <p role="alert" className="mt-4 text-sm text-red-300">{errors[question.id]}</p>
                   ) : null}
 
                   <div className="mt-5 flex flex-col gap-2 sm:flex-row">
@@ -1470,17 +1473,16 @@ export function AdminBoard({
                 </>
               );
             })()}
-          </div>
+          </Modal>
         </div>
       ) : null}
 
       {confirming ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
+          <Modal
+            onDismiss={() => setConfirming(null)}
             aria-labelledby="delete-title"
-            className="w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950 shadow-2xl dark:bg-zinc-900 dark:text-zinc-50"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950 shadow-2xl dark:bg-zinc-900 dark:text-zinc-50"
           >
             <h2 id="delete-title" className="text-lg font-semibold">
               刪除題目
@@ -1512,17 +1514,16 @@ export function AdminBoard({
                 確定刪除
               </button>
             </div>
-          </div>
+          </Modal>
         </div>
       ) : null}
 
       {saveConfirm ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
+          <Modal
+            onDismiss={() => setSaveConfirm(false)}
             aria-labelledby="save-title"
-            className="w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950 shadow-2xl dark:bg-zinc-900 dark:text-zinc-50"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950 shadow-2xl dark:bg-zinc-900 dark:text-zinc-50"
           >
             <h2 id="save-title" className="text-lg font-semibold">
               儲存修改
@@ -1546,17 +1547,16 @@ export function AdminBoard({
                 確定儲存
               </button>
             </div>
-          </div>
+          </Modal>
         </div>
       ) : null}
 
       {leaveConfirm ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
+          <Modal
+            onDismiss={() => setLeaveConfirm(false)}
             aria-labelledby="leave-title"
-            className="w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950 shadow-2xl dark:bg-zinc-900 dark:text-zinc-50"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950 shadow-2xl dark:bg-zinc-900 dark:text-zinc-50"
           >
             <h2 id="leave-title" className="text-lg font-semibold">
               尚未儲存
@@ -1580,17 +1580,16 @@ export function AdminBoard({
                 確定退出
               </button>
             </div>
-          </div>
+          </Modal>
         </div>
       ) : null}
 
       {resolveTarget ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
+          <Modal
+            onDismiss={() => setResolveTarget(null)}
             aria-labelledby="resolve-title"
-            className="w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950 shadow-2xl dark:bg-zinc-900 dark:text-zinc-50"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950 shadow-2xl dark:bg-zinc-900 dark:text-zinc-50"
           >
             <h2 id="resolve-title" className="text-lg font-semibold">
               清空檢舉
@@ -1614,17 +1613,16 @@ export function AdminBoard({
                 確定清空
               </button>
             </div>
-          </div>
+          </Modal>
         </div>
       ) : null}
 
       {batchDeleteOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
+          <Modal
+            onDismiss={() => setBatchDeleteOpen(false)}
             aria-labelledby="batch-delete-title"
-            className="w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950 shadow-2xl dark:bg-zinc-900 dark:text-zinc-50"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950 shadow-2xl dark:bg-zinc-900 dark:text-zinc-50"
           >
             <h2 id="batch-delete-title" className="text-lg font-semibold">
               批次刪除
@@ -1648,7 +1646,7 @@ export function AdminBoard({
                 確定刪除
               </button>
             </div>
-          </div>
+          </Modal>
         </div>
       ) : null}
 
@@ -1682,14 +1680,14 @@ export function AdminBoard({
                 批次刪除 (Delete)
               </button>
             </div>
-            {batchError ? <p className="w-full text-sm text-red-300">{batchError}</p> : null}
+            {batchError ? <p role="alert" className="w-full text-sm text-red-300">{batchError}</p> : null}
           </div>
         </div>
       ) : null}
 
       {toast ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
-          <p className="animate-toast-in rounded-full bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg">
+          <p role="status" className="animate-toast-in rounded-full bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg">
             {toast}
           </p>
         </div>

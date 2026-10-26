@@ -2,8 +2,8 @@ import Link from "next/link";
 
 export function SiteFooter({ className = "" }: { className?: string }) {
   return (
-    <footer className={`text-center text-xs leading-5 text-zinc-400 dark:text-zinc-500 ${className}`}>
-      <p>
+    <footer className={`text-center text-xs leading-6 text-zinc-500 dark:text-zinc-400 ${className}`}>
+      <p className="mx-auto max-w-prose text-balance">
         © 2026 AreYouBlind
         <span aria-hidden="true"> · </span>
         <Link href="/guidelines" className="transition-colors hover:text-zinc-600 dark:hover:text-zinc-300">

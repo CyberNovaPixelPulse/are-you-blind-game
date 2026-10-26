@@ -6,7 +6,7 @@ import type { AdminQuestion, AdminReport } from "@/app/admin/types";
 import { assertLocalDev, hasAdminSession } from "@/lib/admin-access";
 import { readStoredOptions } from "@/lib/question-options";
 import { quizImageUrl } from "@/lib/quiz-image";
-import { hasServiceRole } from "@/lib/supabase-admin";
+import { adminDb, hasServiceRole } from "@/lib/supabase-admin";
 import { supabase } from "@/lib/supabase";
 
 export const metadata: Metadata = {
@@ -17,14 +17,13 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 const QUESTION_COLUMNS =
-  "id, author_name, crop_image_path, original_image_path, status, difficulty, language, options, created_at";
+  "id, author_name, crop_image_path, status, difficulty, language, options, created_at";
 const REPORT_COLUMNS = "id, question_id, reason_category, details, created_at";
 
 type QuestionRow = {
   id: string;
   author_name: string;
   crop_image_path: string;
-  original_image_path: string;
   status: string;
   difficulty: string;
   language?: string | null;
@@ -88,23 +87,25 @@ export default async function AdminPage() {
   if (!process.env.ADMIN_SECRET) notFound();
   if (!(await hasAdminSession())) return <AdminGate />;
 
-  const [questionsAttempt, reportsAttempt, hideAttempt] = await Promise.all([
-    supabase
+  const db = hasServiceRole() ? adminDb() : supabase;
+  const [questionsAttempt, reportsAttempt, hideAttempt, answerKeysAttempt] = await Promise.all([
+    db
       .from("questions")
       .select(`${QUESTION_COLUMNS}, solvability_score, category, quality_score, score_breakdown`),
-    supabase.from("question_reports").select(`${REPORT_COLUMNS}, status`),
-    supabase.from("questions").select("id, hide_reason"),
+    db.from("question_reports").select(`${REPORT_COLUMNS}, status`),
+    db.from("questions").select("id, hide_reason"),
+    db.from("question_answer_keys").select("question_id, correct_option_id, original_image_path"),
   ]);
   const questionsResult = questionsAttempt.error && missingColumn(questionsAttempt.error.message)
-    ? await supabase.from("questions").select(QUESTION_COLUMNS)
+    ? await db.from("questions").select(QUESTION_COLUMNS)
     : questionsAttempt;
   const reportsResult = reportsAttempt.error && missingColumn(reportsAttempt.error.message)
-    ? await supabase.from("question_reports").select(REPORT_COLUMNS)
+    ? await db.from("question_reports").select(REPORT_COLUMNS)
     : reportsAttempt;
 
   if (questionsResult.error) {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-3xl items-center px-6 font-sans">
+      <main id="main-content" tabIndex={-1} className="gm-page gm-workspace mx-auto flex min-h-screen w-full max-w-3xl items-center px-6 font-sans">
         <p className="text-sm text-red-600">題目讀取失敗，請再整理一次。</p>
       </main>
     );
@@ -132,20 +133,45 @@ export default async function AdminPage() {
     }
   }
 
+  const answerRows = (answerKeysAttempt.data ?? []) as {
+    question_id: string; correct_option_id: string; original_image_path?: string | null;
+  }[];
+  const correctOptionByQuestion = new Map<string, string>(
+    answerRows.map((row) => [row.question_id, row.correct_option_id] as [string, string]),
+  );
+  const originalUrlByQuestion = new Map<string, string>();
+  if (hasServiceRole()) {
+    await Promise.all(answerRows.map(async (row) => {
+      const path = row.original_image_path;
+      if (!path) return;
+      if (/^https:\/\//i.test(path)) {
+        originalUrlByQuestion.set(row.question_id, path);
+        return;
+      }
+      const signed = await adminDb().storage.from("quiz-originals").createSignedUrl(path, 300);
+      if (!signed.error) originalUrlByQuestion.set(row.question_id, signed.data.signedUrl);
+    }));
+  }
+
   const questions: AdminQuestion[] = ((questionsResult.data ?? []) as QuestionRow[])
     .map((row) => ({
       id: row.id,
       authorName: row.author_name,
       createdAt: row.created_at,
       cropUrl: publicImageUrl(row.crop_image_path),
-      originalUrl: publicImageUrl(row.original_image_path),
+      originalUrl: originalUrlByQuestion.get(row.id) ?? "",
       cropPath: row.crop_image_path,
-      originalPath: row.original_image_path,
+      originalPath: answerRows.find((key) => key.question_id === row.id)?.original_image_path ?? "",
       status: row.status,
       hideReason: hideReasonById.get(row.id) ?? null,
       difficulty: row.difficulty,
       language: readLanguage(row.language),
-      options: readStoredOptions(row.options),
+      options: readStoredOptions(row.options).map((option) => ({
+        ...option,
+        isCorrect: correctOptionByQuestion.has(row.id)
+          ? option.id === correctOptionByQuestion.get(row.id)
+          : option.isCorrect,
+      })),
       reports: reportsByQuestion.get(row.id) ?? [],
       solvabilityScore: readScore(row.solvability_score),
       category: readCategory(row.category),

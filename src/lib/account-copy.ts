@@ -1,6 +1,7 @@
 import type { LanguageCode } from "@/lib/languages";
 
 const en = {
+  unsaved: "Your quiz has unsaved changes. Leave this page and discard them?",
   google: "Continue with Google", emailLogin: "Or use email and password", forgot: "Forgot password?",
   title: "Reset your password", email: "Email", send: "Send reset link",
   hint: "Enter your account email to receive a password reset link.",
@@ -20,6 +21,7 @@ type AccountCopy = typeof en;
 const copy: Partial<Record<LanguageCode, AccountCopy>> = {
   en,
   "zh-TW": {
+    unsaved: "題目還有未儲存的內容。確定離開並捨棄變更？",
     google: "使用 Google 登入", emailLogin: "或使用 Email 與密碼", forgot: "忘記密碼？",
     title: "重設密碼", email: "Email", send: "寄送重設連結",
     hint: "輸入帳號的 Email，我們會寄送密碼重設連結。",
@@ -32,6 +34,7 @@ const copy: Partial<Record<LanguageCode, AccountCopy>> = {
     working: "處理中…", requestAgain: "重新申請重設連結", googleError: "Google 登入失敗，請再試一次。",
   },
   "zh-CN": {
+    unsaved: "题目还有未保存的内容。确定离开并放弃更改？",
     google: "使用 Google 登录", emailLogin: "或使用 Email 和密码", forgot: "忘记密码？",
     title: "重置密码", email: "Email", send: "发送重置链接",
     hint: "输入账号的 Email，我们会发送密码重置链接。",
@@ -44,6 +47,7 @@ const copy: Partial<Record<LanguageCode, AccountCopy>> = {
     working: "处理中…", requestAgain: "重新申请重置链接", googleError: "Google 登录失败，请重试。",
   },
   ar: {
+    unsaved: "لديك تغييرات غير محفوظة. هل تريد مغادرة الصفحة وتجاهلها؟",
     google: "المتابعة باستخدام Google", emailLogin: "أو استخدم البريد الإلكتروني وكلمة المرور", forgot: "نسيت كلمة المرور؟",
     title: "إعادة تعيين كلمة المرور", email: "البريد الإلكتروني", send: "إرسال رابط إعادة التعيين",
     hint: "أدخل بريد حسابك الإلكتروني لتلقي رابط إعادة تعيين كلمة المرور.",

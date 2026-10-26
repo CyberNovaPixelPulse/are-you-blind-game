@@ -1,8 +1,10 @@
 "use client";
 
+import { Modal } from "@/components/modal";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
+import { isVipEntitlementActive } from "@/lib/vip-entitlement";
 
 const AD_SECONDS = 5;
 
@@ -26,12 +28,12 @@ export function usePlayerVip() {
       }
       void supabase
         .from("profiles")
-        .select("is_vip")
+        .select("is_vip, vip_plan, vip_expires_at")
         .eq("id", userId)
         .maybeSingle()
         .then(({ data: profile, error }) => {
           if (!active) return;
-          setIsVip(!error && profile?.is_vip === true);
+          setIsVip(!error && isVipEntitlementActive(profile));
           setVipReady(true);
         });
     });
@@ -104,17 +106,16 @@ export function AdModal({ open, onComplete }: { open: boolean; onComplete: () =>
       role="presentation"
       onClick={finish}
     >
-      <p className="absolute top-4 right-4 rounded-full bg-white/15 px-3 py-1 text-sm font-semibold text-white tabular-nums">
-        廣告剩餘 {seconds} 秒
-      </p>
       <div className="flex h-full items-center justify-center px-4">
-        <div
-          role="dialog"
-          aria-modal="true"
+        <Modal
+          onDismiss={finish}
           aria-labelledby="ad-modal-title"
-          className="w-full max-w-sm rounded-3xl bg-zinc-900 p-4 text-white shadow-2xl"
+          className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl bg-zinc-900 p-4 text-white shadow-2xl"
           onClick={(event) => event.stopPropagation()}
         >
+          <p className="absolute top-4 right-4 rounded-full bg-white/15 px-3 py-1 text-sm font-semibold text-white tabular-nums">
+            廣告剩餘 {seconds} 秒
+          </p>
           <p className="text-xs font-bold tracking-[0.22em] text-amber-300">AD</p>
           <div className="mt-3 flex justify-center">
             <ins
@@ -136,7 +137,7 @@ export function AdModal({ open, onComplete }: { open: boolean; onComplete: () =>
           >
             略過廣告
           </button>
-        </div>
+        </Modal>
       </div>
     </div>,
     document.body,

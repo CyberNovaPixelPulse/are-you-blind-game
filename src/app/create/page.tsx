@@ -1,5 +1,7 @@
 "use client";
 
+import { useUnsavedChanges } from "@/lib/use-unsaved-changes";
+import { Modal } from "@/components/modal";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -104,10 +106,15 @@ function aiOptionsReady(
   );
 }
 
-async function postAiOptions(correctAnswer: string, language: string, imageBase64: string | null) {
+async function postAiOptions(
+  correctAnswer: string,
+  language: string,
+  imageBase64: string | null,
+  accessToken: string,
+) {
   const response = await fetch("/api/ai-options", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({
       correctAnswer,
       language,
@@ -253,11 +260,30 @@ export default function CreatePage() {
   const [cancelling, setCancelling] = useState(false);
   const [publicationFrozen, setPublicationFrozen] = useState(false);
   const [formError, setFormError] = useState("");
+  const [invalidField, setInvalidField] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const [moderationReport, setModerationReport] = useState<ModerationReport | null>(null);
   const [aiPending, setAiPending] = useState(false);
   const [aiError, setAiError] = useState("");
   const [result, setResult] = useState<PublishResult | null>(null);
   const [scoreOpen, setScoreOpen] = useState(false);
+  useUnsavedChanges(!result && Boolean(sourceFile || options.some(option => option.optionText || option.tauntText)), account.text.unsaved);
+
+  function fieldProps(name: string) {
+    return { name, autoComplete: "off", "aria-invalid": invalidField === name,
+      "aria-describedby": invalidField === name ? "create-validation-error" : undefined };
+  }
+  function fieldError(name: string) {
+    return invalidField === name && formError ? <span id="create-validation-error" role="alert" className="text-sm text-red-600 dark:text-red-400">{formError}</span> : null;
+  }
+  function validationFailure(name: string, message: string) {
+    setInvalidField(name);
+    requestAnimationFrame(() => {
+      const field = formRef.current?.elements.namedItem(name);
+      if (field instanceof HTMLElement) field.focus();
+    });
+    return message;
+  }
 
   useEffect(() => {
     const stored = readStoredAuthorName();
@@ -348,11 +374,17 @@ export default function CreatePage() {
     setAiPending(true);
     setAiError("");
     try {
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      if (!accessToken) {
+        setAiError(copy.needLogin);
+        return;
+      }
       const imageBase64 = await cropToAiJpegBase64(imageUrl, croppedAreaPixels);
-      const posted = await postAiOptions(correctAnswer, targetLanguage, imageBase64);
+      const posted = await postAiOptions(correctAnswer, targetLanguage, imageBase64, accessToken);
       const recovered =
         imageBase64 && !aiOptionsReady(posted.payload, posted.ok)
-          ? await postAiOptions(correctAnswer, targetLanguage, null)
+          ? await postAiOptions(correctAnswer, targetLanguage, null, accessToken)
           : posted;
       const payload = recovered.payload;
       if (!aiOptionsReady(payload, recovered.ok)) {
@@ -451,29 +483,29 @@ export default function CreatePage() {
   function validate(): string | null {
     const name = authorName.trim();
     if (name.length < 1 || name.length > 40) {
-      return copy.authorLength;
+      return validationFailure("author-name", copy.authorLength);
     }
     if (!sourceFile || !imageUrl) {
-      return copy.needImage;
+      return validationFailure("quiz-image", copy.needImage);
     }
     if (!croppedAreaPixels) {
-      return copy.cropPending;
+      return validationFailure("crop-zoom", copy.cropPending);
     }
     if (croppedAreaPixels.width < 32 || croppedAreaPixels.height < 32) {
-      return copy.cropTooSmall;
+      return validationFailure("crop-zoom", copy.cropTooSmall);
     }
     for (const [index, option] of options.entries()) {
       const text = option.optionText.trim();
       const taunt = option.tauntText.trim();
       if (text.length < 1 || text.length > 120) {
-        return fillTemplate(copy.optionLength, { n: index + 1 });
+        return validationFailure(`option-text-${index}`, fillTemplate(copy.optionLength, { n: index + 1 }));
       }
       if (taunt.length < 1 || taunt.length > 280) {
-        return fillTemplate(copy.tauntLength, { n: index + 1 });
+        return validationFailure(`option-taunt-${index}`, fillTemplate(copy.tauntLength, { n: index + 1 }));
       }
     }
     if (correctIndex < 0 || correctIndex >= OPTION_COUNT) {
-      return copy.needCorrect;
+      return validationFailure("correct-option", copy.needCorrect);
     }
     return null;
   }
@@ -543,7 +575,7 @@ export default function CreatePage() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (publicationRef.current) { await resumePublication(false); return; }
-    setFormError(""); setModerationReport(null);
+    setFormError(""); setInvalidField(null); setModerationReport(null);
     const validationError=validate();
     if(validationError){setFormError(validationError);return;}
     if(!sourceFile || !imageUrl || !croppedAreaPixels || submittingRef.current) return;
@@ -605,8 +637,8 @@ export default function CreatePage() {
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50 font-sans text-zinc-950 dark:bg-black dark:text-zinc-50">
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 py-10 sm:px-6">
-        <header className="flex flex-col gap-3">
+      <main id="main-content" tabIndex={-1} className="gm-page gm-workspace gm-form-page mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 py-10 sm:px-6">
+        <header className="gm-page-header flex flex-col gap-3">
           <Link
             href="/"
             aria-label={copy.backHome}
@@ -616,7 +648,7 @@ export default function CreatePage() {
             {copy.backHome}
           </Link>
           <div className="flex flex-col gap-2">
-            <h1 className="text-3xl font-semibold tracking-tight">{copy.title}</h1>
+            <h1 className="text-3xl">{copy.title}</h1>
             <p className="max-w-xl text-zinc-600 dark:text-zinc-400">{copy.intro}</p>
             <label className="flex flex-wrap items-center gap-2 text-sm font-medium text-zinc-500">
               {copy.quizLanguage}
@@ -639,7 +671,7 @@ export default function CreatePage() {
           </div>
         </header>
 
-        <section className="rounded-3xl border border-black/[.08] bg-white p-5 dark:border-white/[.12] dark:bg-zinc-950">
+        <section className="rounded-2xl border border-black/[.08] bg-white p-5 dark:border-white/[.12] dark:bg-zinc-950">
           {authReady && user ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm">
@@ -663,6 +695,8 @@ export default function CreatePage() {
                   Email
                   <input
                     type="email"
+                    name="email"
+                    spellCheck={false}
                     required
                     autoComplete="email"
                     value={email}
@@ -674,6 +708,7 @@ export default function CreatePage() {
                   {copy.password}
                   <input
                     type="password"
+                    name="password"
                     required
                     autoComplete="current-password"
                     value={password}
@@ -715,7 +750,7 @@ export default function CreatePage() {
         </section>
 
         {result ? (
-          <section className="rounded-3xl border border-black/[.08] bg-white p-5 dark:border-white/[.12] dark:bg-zinc-950">
+          <section className="rounded-2xl border border-black/[.08] bg-white p-5 dark:border-white/[.12] dark:bg-zinc-950">
             <h2 className="text-xl font-semibold">{copy.published}</h2>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span
@@ -774,11 +809,10 @@ export default function CreatePage() {
 
         {result && scoreOpen ? (
           <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
-            <div
-              role="dialog"
-              aria-modal="true"
+            <Modal
+              onDismiss={() => setScoreOpen(false)}
               aria-labelledby="score-detail-title"
-              className="flex max-h-[85vh] w-full max-w-lg flex-col gap-4 overflow-y-auto rounded-3xl bg-white p-5 text-zinc-950 shadow-xl dark:bg-zinc-950 dark:text-zinc-50"
+              className="overscroll-contain flex max-h-[85vh] w-full max-w-lg flex-col gap-4 overflow-y-auto rounded-2xl bg-white p-5 text-zinc-950 shadow-xl dark:bg-zinc-950 dark:text-zinc-50"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -845,7 +879,7 @@ export default function CreatePage() {
                   <span className="mt-1 block">{result.breakdown.suggestion}</span>
                 </p>
               ) : null}
-            </div>
+            </Modal>
           </div>
         ) : null}
 
@@ -865,11 +899,13 @@ export default function CreatePage() {
         ) : null}
         {cancelling ? <p role="status">正在確認取消結果</p> : null}
         {phase === "confirming" ? <p role="status">正在確認發布結果</p> : null}
-        <form className="flex flex-col gap-8" onSubmit={onSubmit}>
+        <form ref={formRef} className="flex flex-col gap-8" onSubmit={onSubmit}>
         <fieldset disabled={pending} className="flex min-w-0 flex-col gap-8">
           <label className="flex flex-col gap-2 text-sm font-medium">
             {copy.authorLabel}
             <input
+              {...fieldProps("author-name")}
+              spellCheck={false}
               value={authorName}
               maxLength={40}
               onChange={(event) => {
@@ -881,16 +917,18 @@ export default function CreatePage() {
               className="h-11 rounded-xl border border-black/10 bg-white px-3 font-normal outline-none focus:border-zinc-950 dark:border-white/15 dark:bg-zinc-950 dark:focus:border-zinc-50"
             />
           </label>
+          {fieldError("author-name")}
 
           <section className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <h2 className="text-lg font-semibold">{copy.imageTitle}</h2>
               <p className="text-sm text-zinc-600 dark:text-zinc-400">{copy.imageHint}</p>
             </div>
-            <label className="flex h-12 w-fit cursor-pointer items-center rounded-full border border-black/10 px-5 text-sm font-medium transition-colors hover:bg-black/[.04] dark:border-white/15 dark:hover:bg-white/[.08]">
+            <label className="focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-zinc-500 flex h-12 w-fit cursor-pointer items-center rounded-full border border-black/10 px-5 text-sm font-medium transition-colors hover:bg-black/[.04] dark:border-white/15 dark:hover:bg-white/[.08]">
               {copy.pickImage}
               <input
                 type="file"
+                {...fieldProps("quiz-image")}
                 accept="image/*"
                 className="sr-only"
                 onChange={(event) => {
@@ -899,6 +937,7 @@ export default function CreatePage() {
                 }}
               />
             </label>
+            {fieldError("quiz-image")}
             {sourceFile ? (
               <p className="text-sm text-zinc-500">{sourceFile.name}</p>
             ) : null}
@@ -941,6 +980,7 @@ export default function CreatePage() {
                   <span className="shrink-0">{copy.zoom}</span>
                   <input
                     type="range"
+                    {...fieldProps("crop-zoom")}
                     min={1}
                     max={6}
                     step={0.01}
@@ -949,6 +989,7 @@ export default function CreatePage() {
                     className="w-full"
                   />
                 </label>
+                {fieldError("crop-zoom")}
               </div>
             ) : null}
           </section>
@@ -990,6 +1031,7 @@ export default function CreatePage() {
                 <label className="flex flex-col gap-1 text-sm font-medium">
                   {copy.optionText}
                   <input
+                    {...fieldProps(`option-text-${index}`)}
                     value={option.optionText}
                     maxLength={120}
                     onChange={(event) =>
@@ -998,9 +1040,11 @@ export default function CreatePage() {
                     className="h-11 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus:border-zinc-950 dark:border-white/15 dark:focus:border-zinc-50"
                   />
                 </label>
+                {fieldError(`option-text-${index}`)}
                 <label className="flex flex-col gap-1 text-sm font-medium">
                   {copy.tauntLabel}
                   <input
+                    {...fieldProps(`option-taunt-${index}`)}
                     value={option.tauntText}
                     maxLength={280}
                     onChange={(event) =>
@@ -1009,11 +1053,12 @@ export default function CreatePage() {
                     className="h-11 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus:border-zinc-950 dark:border-white/15 dark:focus:border-zinc-50"
                   />
                 </label>
+                {fieldError(`option-taunt-${index}`)}
               </div>
             ))}
           </fieldset>
 
-          {formError ? (
+          {formError && !invalidField ? (
             <p role="alert" className="text-sm text-red-600 dark:text-red-400">
               {formError}
             </p>
@@ -1031,11 +1076,10 @@ export default function CreatePage() {
       </main>
       {moderationReport ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
-          <div
-            role="dialog"
-            aria-modal="true"
+          <Modal
+            onDismiss={() => setModerationReport(null)}
             aria-labelledby="moderation-title"
-            className="flex w-full max-w-lg flex-col gap-4 rounded-3xl bg-white p-5 text-zinc-950 shadow-xl dark:bg-zinc-950 dark:text-zinc-50"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain flex w-full max-w-lg flex-col gap-4 rounded-2xl bg-white p-5 text-zinc-950 shadow-xl dark:bg-zinc-950 dark:text-zinc-50"
           >
             <div className="flex flex-col gap-1">
               <h2 id="moderation-title" className="text-xl font-semibold">
@@ -1095,7 +1139,7 @@ export default function CreatePage() {
             >
               {copy.guidelines}
             </Link>
-          </div>
+          </Modal>
         </div>
       ) : null}
     </div>
