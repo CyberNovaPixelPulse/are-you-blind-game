@@ -59,15 +59,14 @@ export default function TermsPage() {
         <Link
           href="/"
           aria-label="返回首頁"
-          className="inline-flex h-9 w-fit items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] hover:text-zinc-950 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[.08] dark:hover:text-zinc-50"
+          className="inline-flex h-9 w-fit items-center gap-1 rounded-xl border border-game-line px-3 text-sm font-medium text-game-muted transition-colors hover:bg-black/[.04] hover:text-zinc-950 dark:border-game-line dark:text-zinc-300 dark:hover:bg-white/[.08] dark:hover:text-zinc-50"
         >
           <span aria-hidden="true">←</span>
           返回首頁
         </Link>
         <div className="flex flex-col gap-2">
-          <p className="text-sm font-semibold tracking-[0.18em] text-zinc-500 uppercase">AreYouBlind</p>
           <h1 className="text-3xl">服務條款與免責聲明</h1>
-          <p className="max-w-xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+          <p className="max-w-xl text-sm leading-6 text-game-muted dark:text-game-muted">
             使用本站的猜題、出題與挑戰功能，即表示你已閱讀並同意下列說明。
           </p>
         </div>
@@ -77,17 +76,17 @@ export default function TermsPage() {
         <section
           key={section.id}
           id={section.id}
-          className="gm-reading-block border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950"
+          className="gm-reading-block border border-game-line bg-white p-5 dark:border-game-line dark:bg-game-panel"
         >
           <h2 className="text-lg font-bold">{section.title}</h2>
           <div className="mt-3 flex flex-col gap-3">
             {section.paragraphs.map((paragraph) => (
-              <p key={paragraph} className="text-sm leading-7 text-zinc-600 dark:text-zinc-400">
+              <p key={paragraph} className="text-sm leading-7 text-game-muted dark:text-game-muted">
                 {paragraph}
               </p>
             ))}
             {section.id === "copyright" ? (
-              <p className="text-sm leading-7 text-zinc-600 dark:text-zinc-400">
+              <p className="text-sm leading-7 text-game-muted dark:text-game-muted">
                 若你發現題圖侵害你的智慧財產權，請來信官方信箱{" "}
                 <a
                   href="mailto:contact@areyoublind.game"
@@ -99,7 +98,7 @@ export default function TermsPage() {
               </p>
             ) : null}
             {section.id === "refund" ? (
-              <p className="text-sm leading-7 text-zinc-600 dark:text-zinc-400">
+              <p className="text-sm leading-7 text-game-muted dark:text-game-muted">
                 如遇付款失敗、重複扣款或權限沒有開通，請聯繫客服信箱{" "}
                 <a
                   href="mailto:support@areyoublind.game"

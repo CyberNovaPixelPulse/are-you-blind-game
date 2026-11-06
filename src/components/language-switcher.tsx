@@ -41,11 +41,11 @@ export function LanguageSwitcher() {
         onKeyDown={(event) => {
           if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); setOpen(true); }
         }}
-        className="inline-flex min-h-11 max-w-[11.5rem] items-center gap-1.5 rounded-full border border-black/10 bg-white px-3 text-sm font-semibold text-zinc-950 shadow-sm transition hover:bg-zinc-50 dark:border-white/15 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
+        className="inline-flex min-h-11 max-w-[11.5rem] items-center gap-1.5 rounded-xl border border-game-line bg-white px-3 text-sm font-semibold text-zinc-950  transition hover:bg-zinc-50 dark:border-game-line dark:bg-game-panel dark:text-zinc-50 dark:hover:bg-zinc-900"
       >
         <span aria-hidden="true">{current.flag}</span>
         <span className="truncate">{current.nativeName}</span>
-        <span aria-hidden="true" className="text-xs text-zinc-500">
+        <span aria-hidden="true" className="text-xs text-game-muted">
           ▾
         </span>
       </button>
@@ -63,7 +63,7 @@ export function LanguageSwitcher() {
             if (next >= 0) { event.preventDefault(); options[next]?.focus(); }
             if (event.key === "Tab") setOpen(false);
           }}
-          className="absolute top-full left-0 z-50 mt-2 max-h-80 w-72 overflow-y-auto overscroll-contain rounded-2xl border border-black/10 bg-white p-1.5 shadow-xl shadow-black/10 dark:border-white/15 dark:bg-zinc-950 dark:shadow-black/50"
+          className="absolute top-full left-0 z-50 mt-2 max-h-80 w-72 overflow-y-auto overscroll-contain rounded-2xl border border-game-line bg-white p-1.5  shadow-black/10 dark:border-game-line dark:bg-game-panel dark:shadow-black/50"
         >
           {LANGUAGES.map((item) => {
             const selected = item.code === language;
@@ -81,7 +81,7 @@ export function LanguageSwitcher() {
                 }}
                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition ${
                   selected
-                    ? "bg-zinc-950 text-white dark:bg-zinc-50 dark:text-zinc-950"
+                    ? "bg-game-accent text-white  "
                     : "hover:bg-zinc-100 dark:hover:bg-white/10"
                 }`}
               >
@@ -93,7 +93,7 @@ export function LanguageSwitcher() {
                     {item.nativeName}
                   </span>
                   <span
-                    className={`block truncate text-xs ${selected ? "text-white/70 dark:text-zinc-600" : "text-zinc-500"}`}
+                    className={`block truncate text-xs ${selected ? "text-white/70 dark:text-game-muted" : "text-game-muted"}`}
                   >
                     {item.name}
                   </span>

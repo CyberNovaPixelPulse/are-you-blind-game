@@ -110,13 +110,13 @@ export function AdModal({ open, onComplete }: { open: boolean; onComplete: () =>
         <Modal
           onDismiss={finish}
           aria-labelledby="ad-modal-title"
-          className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl bg-zinc-900 p-4 text-white shadow-2xl"
+          className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-game-panel p-4 text-foreground "
           onClick={(event) => event.stopPropagation()}
         >
           <p className="absolute top-4 right-4 rounded-full bg-white/15 px-3 py-1 text-sm font-semibold text-white tabular-nums">
             廣告剩餘 {seconds} 秒
           </p>
-          <p className="text-xs font-bold tracking-[0.22em] text-amber-300">AD</p>
+          <p className="text-xs font-semibold text-game-muted">廣告</p>
           <div className="mt-3 flex justify-center">
             <ins
               className="adsbygoogle"
@@ -128,12 +128,12 @@ export function AdModal({ open, onComplete }: { open: boolean; onComplete: () =>
           <h2 id="ad-modal-title" className="mt-4 text-lg font-black">
             贊助展示
           </h2>
-          <p className="mt-1 text-sm text-zinc-400">倒數結束後會回到遊戲。</p>
+          <p className="mt-1 text-sm text-game-muted">倒數結束後會回到遊戲。</p>
           <button
             type="button"
             disabled={seconds > 0}
             onClick={finish}
-            className="mt-4 h-11 w-full rounded-full bg-white text-sm font-bold text-zinc-950 disabled:opacity-40"
+            className="mt-4 h-11 w-full rounded-xl bg-game-accent text-sm font-bold text-white disabled:opacity-40"
           >
             略過廣告
           </button>

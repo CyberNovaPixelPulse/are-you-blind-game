@@ -76,39 +76,7 @@ function crossedStreakTier(streak: number) {
 }
 
 function StreakFlame({ streak, label }: { streak: number; label: string }) {
-  if (streak >= 10) {
-    return (
-      <p className="relative shrink-0">
-        <span className="animate-streak-spark absolute -top-1 left-3 h-1.5 w-1.5 rounded-full bg-amber-200 shadow-[0_0_8px_#fde68a]" />
-        <span className="animate-streak-spark absolute -top-2 right-4 h-1 w-1 rounded-full bg-red-400 [animation-delay:180ms]" />
-        <span className="animate-streak-spark absolute top-0 right-1 h-1 w-1 rounded-full bg-orange-300 [animation-delay:360ms]" />
-        <span className="animate-streak-inferno inline-flex items-center gap-1 rounded-full border border-amber-200/90 bg-gradient-to-r from-red-600 via-amber-300 to-orange-500 bg-[length:200%_100%] px-3 py-1 text-sm font-black text-red-950 shadow-[0_0_18px_rgba(239,68,68,0.9),0_0_32px_rgba(251,191,36,0.7)]">
-          <span className="animate-streak-burn inline-block text-lg" aria-hidden="true">
-            🔥
-          </span>
-          {label}
-        </span>
-      </p>
-    );
-  }
-  if (streak >= 5) {
-    return (
-      <p className="inline-flex shrink-0 origin-right items-center gap-1 rounded-full px-2 py-1 text-lg font-extrabold text-orange-600 shadow-[0_0_16px_rgba(249,115,22,0.5)] dark:text-orange-300">
-        <span className="animate-streak-burn inline-block" aria-hidden="true">
-          🔥
-        </span>
-        {label}
-      </p>
-    );
-  }
-  if (streak >= 3) {
-    return (
-      <p className="shrink-0 animate-pulse text-sm font-semibold text-orange-600 [filter:drop-shadow(0_0_6px_rgba(249,115,22,0.9))] dark:text-orange-400">
-        🔥 {label}
-      </p>
-    );
-  }
-  return <p className="shrink-0 text-sm font-medium">🔥 {label}</p>;
+  return <p className="shrink-0 rounded-lg border border-game-line bg-game-panel px-3 py-1.5 text-sm font-bold text-zinc-950 dark:text-zinc-50" data-streak={streak}>{label}</p>;
 }
 
 async function celebrate() {
@@ -367,19 +335,19 @@ export default function PlayPage() {
   const answerText = revealedAnswer || options.find((option) => option.isCorrect)?.text || "";
 
   return (
-    <main id="main-content" tabIndex={-1} className="gm-page gm-game mx-auto flex min-h-[100dvh] w-full max-w-md flex-col p-3 font-sans text-zinc-950 md:h-auto md:min-h-screen md:overflow-visible md:p-4 md:py-10 dark:text-zinc-50">
+    <main id="main-content" tabIndex={-1} className="gm-page gm-game mx-auto flex min-h-[100dvh] w-full max-w-md flex-col p-3 md:max-w-5xl font-sans text-zinc-950 md:h-auto md:min-h-screen md:overflow-visible md:p-4 md:py-10 dark:text-zinc-50">
       <h1 className="sr-only">{t("casual")}</h1>
       <header className="mb-2 flex shrink-0 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <Link
             href="/"
             aria-label={t.createQuiz.backHome}
-            className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] hover:text-zinc-950 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[.08] dark:hover:text-zinc-50"
+            className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-xl border border-game-line px-3 text-sm font-medium text-game-muted transition-colors hover:bg-black/[.04] hover:text-zinc-950 dark:border-game-line dark:text-zinc-300 dark:hover:bg-white/[.08] dark:hover:text-zinc-50"
           >
             <span aria-hidden="true">←</span>
             {t.createQuiz.backHome}
           </Link>
-          <p className="truncate text-sm text-zinc-500">{authorName}</p>
+          <p className="truncate text-sm text-game-muted">{authorName}</p>
         </div>
         <StreakFlame streak={streak} label={t("streak", { n: streak })} />
       </header>
@@ -389,17 +357,17 @@ export default function PlayPage() {
           {t("thinPool")}
         </p>
       ) : null}
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 py-3">
+      <div className="game-question-stage">
       <section className="flex w-full flex-col items-center">
 
         {status === "loading" ? (
-          <p className="py-16 text-center text-sm text-zinc-500">{t("drawing")}</p>
+          <p className="py-16 text-center text-sm text-game-muted">{t("drawing")}</p>
         ) : null}
 
         {status === "empty" ? (
           <div className="py-10">
             <h2 className="text-xl font-semibold">還沒有題目</h2>
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="mt-2 text-sm text-game-muted dark:text-game-muted">
               先上傳一張圖、框出特寫，再回來猜。
             </p>
           </div>
@@ -414,7 +382,7 @@ export default function PlayPage() {
         {status === "ready" && question ? (
           <div
             key={question.id}
-            className="relative mx-auto aspect-square w-[min(100%,280px,calc(100dvh-320px))] max-w-[280px] overflow-hidden rounded-2xl shadow-2xl sm:w-[min(100%,320px,calc(100dvh-320px))] sm:max-w-[320px]"
+            className="game-question-image relative mx-auto aspect-square w-[min(100%,280px,calc(100dvh-320px))] max-w-[280px] overflow-hidden rounded-2xl  sm:w-[min(100%,320px,calc(100dvh-320px))] sm:max-w-[320px]"
           >
             {/* 預載用的是同一條公開網址，這裡直接用 img，換題才吃得到瀏覽器快取。 */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -430,12 +398,12 @@ export default function PlayPage() {
               }
             />
             {solved ? (
-              <p className="animate-quiz-pop absolute inset-x-4 bottom-4 rounded-full bg-emerald-500 px-4 py-2 text-center text-base font-semibold text-white shadow-lg">
+              <p className="animate-quiz-pop absolute inset-x-4 bottom-4 rounded-full bg-emerald-700 px-4 py-2 text-center text-base font-semibold text-white ">
                 {t("correct")}
               </p>
             ) : null}
             {miss && !solved ? (
-              <p className="absolute inset-x-4 bottom-4 rounded-full bg-red-500 px-4 py-2 text-center text-base font-semibold text-white shadow-lg">
+              <p className="absolute inset-x-4 bottom-4 rounded-full bg-red-700 px-4 py-2 text-center text-base font-semibold text-white ">
                 {t("wrong")}
               </p>
             ) : null}
@@ -443,8 +411,8 @@ export default function PlayPage() {
         ) : null}
       </section>
 
-      <section className="flex w-full max-w-[280px] shrink-0 flex-col gap-3 sm:max-w-[320px]">
-        <p role="status" aria-live="polite" className="min-h-5 text-center text-sm text-zinc-600 dark:text-zinc-300">
+      <section className="game-question-answers flex w-full max-w-[280px] shrink-0 flex-col gap-3 sm:max-w-[320px]">
+        <p role="status" aria-live="polite" className="min-h-5 text-center text-sm text-game-muted dark:text-zinc-300">
           {guessPending ? copy.checking : ""}
         </p>
         {status === "ready" && question ? (
@@ -462,17 +430,17 @@ export default function PlayPage() {
                   onClick={() => onGuess(option)}
                   className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-start text-base font-medium ${
                     pickedWrong
-                      ? "animate-quiz-shake border-red-500 bg-red-500 text-white"
+                      ? "animate-quiz-shake border-red-500 bg-red-700 text-white"
                       : markAnswer
                         ? "border-emerald-400 bg-emerald-500/15 text-emerald-800 ring-2 ring-emerald-400 dark:text-emerald-100"
                         : pickedRight
-                          ? "border-emerald-500 bg-emerald-500 text-white"
-                          : "border-black/10 bg-white active:bg-black/[.04] dark:border-white/[.12] dark:bg-zinc-950 dark:active:bg-white/[.06]"
+                          ? "border-emerald-500 bg-emerald-700 text-white"
+                          : "border-game-line bg-white active:bg-black/[.04] dark:border-game-line dark:bg-game-panel dark:active:bg-white/[.06]"
                   }`}
                 >
                   <span className="min-w-0 break-words [overflow-wrap:anywhere]">{option.text}</span>
                   {markAnswer ? (
-                    <span className="shrink-0 rounded-full bg-emerald-500 px-2 py-0.5 text-xs font-bold text-white">
+                    <span className="shrink-0 rounded-full bg-emerald-700 px-2 py-0.5 text-xs font-bold text-white">
                       {copy.correctAnswer}
                     </span>
                   ) : null}
@@ -490,17 +458,17 @@ export default function PlayPage() {
 
         {answerFailure === "retryable" && lockedOption ? (
           <button type="button" onClick={() => void onGuess(lockedOption)} disabled={guessPending}
-            className="rounded-full bg-foreground py-3 font-semibold text-background">{copy.retryAnswer}</button>
+            className="rounded-xl bg-game-accent py-3 font-semibold text-white">{copy.retryAnswer}</button>
         ) : null}
         {answerFailure === "unavailable" ? (
           <button type="button" onClick={() => void showNext()}
-            className="rounded-full bg-foreground py-3 font-semibold text-background">{copy.skip}</button>
+            className="rounded-xl bg-game-accent py-3 font-semibold text-white">{copy.skip}</button>
         ) : null}
 
         {status === "empty" ? (
           <Link
             href="/create"
-            className="flex h-16 items-center justify-center rounded-full bg-foreground text-lg font-medium text-background"
+            className="flex h-16 items-center justify-center rounded-xl bg-game-accent text-lg font-medium text-white"
           >
             去出題
           </Link>
@@ -510,7 +478,7 @@ export default function PlayPage() {
           <button
             type="button"
             onClick={() => void showNext()}
-            className="h-16 rounded-full bg-foreground text-lg font-medium text-background"
+            className="h-16 rounded-xl bg-game-accent text-lg font-medium text-white"
           >
             {copy.retry}
           </button>
@@ -521,14 +489,14 @@ export default function PlayPage() {
             <button
               type="button"
               onClick={goNextQuestion}
-              className="rounded-full bg-foreground py-3 text-base font-semibold text-background"
+              className="rounded-xl bg-game-accent py-3 text-base font-semibold text-white"
             >
               {t("next")}
             </button>
             <QuestionReportButton
               questionId={question.id}
               label={`🚩 ${t("report")}`}
-              className="inline-flex min-h-11 items-center justify-center text-center text-xs font-medium text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+              className="inline-flex min-h-11 items-center justify-center text-center text-xs font-medium text-game-muted transition hover:text-zinc-800 dark:text-game-muted dark:hover:text-zinc-200"
             />
           </>
         ) : null}

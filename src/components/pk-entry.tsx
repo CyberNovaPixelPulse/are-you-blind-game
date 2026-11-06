@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useLanguage } from "@/components/language-provider";
 import { supabase } from "@/lib/supabase";
 
-export function PkEntry() {
+export function PkEntry({ appearance, className, markerClassName }: { appearance?: "lobby"; className?: string; markerClassName?: string } = {}) {
   const { t } = useLanguage();
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -30,21 +30,31 @@ export function PkEntry() {
     setPending(false);
   }
 
+  if (appearance === "lobby") return (
+    <div>
+      <button type="button" disabled={pending} onClick={() => void enter()} className={className}>
+        <span aria-hidden="true" className={markerClassName} />
+        <div><h2>{t("pk")}</h2><p>{pending ? "前往中…" : t("pkHint")}</p></div>
+      </button>
+      {error ? <p role="alert" className="mt-2 text-sm text-red-700">{error}</p> : null}
+    </div>
+  );
+
   return (
     <div className="sm:col-span-2">
       <button
         type="button"
         disabled={pending}
         onClick={() => void enter()}
-        className="gm-mode border-s-4 border-s-rose-500 flex w-full flex-col gap-2 rounded-2xl border border-rose-400/40 bg-rose-50 p-5 text-left transition-colors hover:border-rose-500 active:scale-[0.99] disabled:opacity-60 dark:border-rose-300/30 dark:bg-rose-950/40"
+        className=" flex w-full flex-col gap-2 rounded-2xl border border-game-line bg-game-panel p-5 text-left transition-colors hover:border-game-accent active:scale-[0.99] disabled:opacity-60 dark:border-game-line dark:bg-game-panel"
       >
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-bold">⚔️ {t("pk")}</h2>
+          <h2 className="text-xl font-bold">{t("pk")}</h2>
           <span className="rounded-full bg-rose-500 px-3 py-1 text-xs font-semibold text-white">
             {pending ? "前往中" : "2–4 人"}
           </span>
         </div>
-        <p className="text-sm leading-6 text-zinc-700 dark:text-rose-100/80">
+        <p className="text-sm leading-6 text-zinc-700 dark:text-game-muted">
           {t("pkHint")}
         </p>
       </button>

@@ -5,9 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLanguage } from "@/components/language-provider";
 import { supabase } from "@/lib/supabase";
+import { siteUrl } from "@/lib/seo";
 
-const SHARE_HOST = "areyoublind.game";
-const SHARE_URL = "https://areyoublind.game";
+const SHARE_URL = siteUrl?.origin ?? "https://guess.necterelux.com";
+const SHARE_HOST = new URL(SHARE_URL).host;
 
 export type ShameReport = {
   mode: "classic" | "challenge";
@@ -99,10 +100,10 @@ function BattleReportCard({
 
   return (
     <article
-      className="flex h-[640px] w-[360px] flex-col overflow-hidden rounded-[28px] border border-red-500/60 bg-[radial-gradient(120%_70%_at_50%_0%,rgba(239,68,68,0.62),rgba(0,0,0,0)_56%),linear-gradient(180deg,#3a0b12_0%,#12060a_38%,#050505_100%)] p-5 text-white shadow-[0_0_48px_rgba(239,68,68,0.55)]"
-      style={{ fontFamily: 'Arial, "PingFang TC", "Noto Sans TC", sans-serif' }}
+      className="flex h-[640px] w-[360px] flex-col overflow-hidden rounded-2xl border border-game-line bg-game-panel p-5 text-foreground"
+      style={{ fontFamily: 'var(--font-game-sans), sans-serif' }}
     >
-      <p className="text-center text-sm font-black tracking-wide text-red-100">你瞎了嗎？AreYouBlind</p>
+      <p className="text-center text-sm font-black tracking-wide text-game-muted">你瞎了嗎？AreYouBlind</p>
       <div className="mt-4 flex items-center gap-3">
         {avatarSrc && !avatarFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -115,14 +116,14 @@ function BattleReportCard({
             className="h-11 w-11 rounded-full border border-amber-300/80 object-cover"
           />
         ) : (
-          <span className="flex h-11 w-11 items-center justify-center rounded-full border border-amber-300/80 bg-zinc-900 text-lg font-black text-amber-100">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full border border-game-line bg-game-selected text-lg font-black text-foreground">
             {initial(name)}
           </span>
         )}
         <p className="min-w-0 flex-1 truncate text-base font-bold">{name}</p>
       </div>
-      <h2 className="mt-3 text-xl leading-8 font-black text-white">{headline(report)}</h2>
-      <div className="mt-3 h-[188px] overflow-hidden rounded-2xl border border-white/10 bg-zinc-900">
+      <h2 className="mt-3 text-xl leading-8 font-black text-foreground">{headline(report)}</h2>
+      <div className="mt-3 h-[188px] overflow-hidden rounded-2xl border border-game-line bg-game-selected">
         {cropSrc && !cropFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -133,7 +134,7 @@ function BattleReportCard({
             className="h-full w-full object-cover"
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-zinc-500">特寫準備中</div>
+          <div className="flex h-full items-center justify-center text-sm text-game-muted">特寫準備中</div>
         )}
       </div>
       <div className="mt-3 flex flex-col gap-2">
@@ -145,12 +146,12 @@ function BattleReportCard({
           <p className="line-clamp-2 text-sm font-black">正解其實是：{report.answerText}</p>
         </div>
       </div>
-      <blockquote className="mt-3 flex flex-1 items-center justify-center rounded-2xl border border-amber-300/40 bg-amber-300/15 px-3 py-3 text-center">
-        <p className="line-clamp-4 text-lg leading-7 font-black text-amber-100">「{report.taunt}」</p>
+      <blockquote className="mt-3 flex flex-1 items-center justify-center rounded-2xl border border-game-line bg-game-selected px-3 py-3 text-center">
+        <p className="line-clamp-4 text-lg leading-7 font-black text-foreground">「{report.taunt}」</p>
       </blockquote>
       <footer className="mt-3 text-center">
-        <p className="text-xs text-zinc-400">不服來戰！看看你的眼力有多瞎</p>
-        <p className="mt-1 text-sm font-black tracking-wide text-zinc-200">{SHARE_HOST}</p>
+        <p className="text-xs text-game-muted">不服來戰！看看你的眼力有多瞎</p>
+        <p className="mt-1 text-sm font-black tracking-wide text-game-muted">{SHARE_HOST}</p>
       </footer>
     </article>
   );
@@ -275,7 +276,7 @@ export function ShareShameButton({ report }: { report: ShameReport }) {
             </div>
             {toast ? (
               <div className="pointer-events-none fixed inset-x-0 top-6 z-[120] flex justify-center px-4">
-                <p role="status" className="animate-toast-in rounded-full bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg">
+                <p role="status" className="animate-toast-in rounded-full bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white ">
                   {toast}
                 </p>
               </div>
@@ -290,7 +291,7 @@ export function ShareShameButton({ report }: { report: ShameReport }) {
         type="button"
         disabled={rendering}
         onClick={() => void share()}
-        className="h-12 w-full rounded-full bg-gradient-to-r from-fuchsia-500 via-red-500 to-orange-400 text-sm font-black text-white shadow-[0_0_24px_rgba(244,63,94,0.7)] transition disabled:opacity-70"
+        className="h-12 w-full rounded-xl bg-game-accent text-sm font-black text-white  transition disabled:opacity-70"
       >
         {rendering ? "…" : `📸 ${t("shame")}`}
       </button>

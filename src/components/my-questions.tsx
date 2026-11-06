@@ -37,7 +37,7 @@ function readLegacyAnswer(options: unknown) {
 
 function statusClass(status: string) {
   if (status === "active") return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300";
-  if (status === "hidden") return "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300";
+  if (status === "hidden") return "bg-zinc-500/15 text-game-muted dark:text-zinc-300";
   return "bg-amber-500/15 text-amber-800 dark:text-amber-200";
 }
 
@@ -169,7 +169,7 @@ export function MyQuestions() {
       <div className="flex items-center justify-between gap-3">
         <Link
           href="/"
-          className="inline-flex h-9 items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 dark:border-white/15 dark:text-zinc-300"
+          className="inline-flex h-9 items-center gap-1 rounded-xl border border-game-line px-3 text-sm font-medium text-game-muted dark:border-game-line dark:text-zinc-300"
         >
           <span aria-hidden="true">←</span>
           返回首頁
@@ -178,17 +178,17 @@ export function MyQuestions() {
 
       <header className="gm-page-header flex flex-col gap-2">
         <h1 className="text-3xl">我出的題目</h1>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">看看自己的題目有沒有被抽到、被看過幾次。</p>
+        <p className="text-sm text-game-muted dark:text-game-muted">看看自己的題目有沒有被抽到、被看過幾次。</p>
       </header>
 
-      {!ready || status === "loading" ? <p className="text-sm text-zinc-500">正在讀取你的題目…</p> : null}
+      {!ready || status === "loading" ? <p className="text-sm text-game-muted">正在讀取你的題目…</p> : null}
 
       {ready && !user ? (
-        <section className="rounded-2xl border border-black/10 bg-white p-6 dark:border-white/15 dark:bg-zinc-950">
+        <section className="rounded-2xl border border-game-line bg-white p-6 dark:border-game-line dark:bg-game-panel">
           <p className="text-base font-medium">登入後就能查看自己出的題目與曝光成效。</p>
           <Link
             href="/"
-            className="mt-4 inline-flex h-11 items-center rounded-full bg-zinc-950 px-4 text-sm font-semibold text-white dark:bg-zinc-50 dark:text-zinc-950"
+            className="mt-4 inline-flex h-11 items-center rounded-xl bg-game-accent px-4 text-sm font-semibold text-white  "
           >
             回到首頁登入
           </Link>
@@ -202,11 +202,11 @@ export function MyQuestions() {
       ) : null}
 
       {status === "ready" && user && works.length === 0 ? (
-        <section className="rounded-2xl border border-dashed border-black/15 bg-white p-6 text-center dark:border-white/20 dark:bg-zinc-950">
+        <section className="rounded-2xl border border-dashed border-game-line bg-white p-6 text-center dark:border-game-line dark:bg-game-panel">
           <p className="text-lg font-semibold">你還沒出過題，立即去出題秀操作！</p>
           <Link
             href="/create"
-            className="mt-4 inline-flex h-12 items-center rounded-full bg-zinc-950 px-5 text-base font-semibold text-white dark:bg-zinc-50 dark:text-zinc-950"
+            className="mt-4 inline-flex h-12 items-center rounded-xl bg-game-accent px-5 text-base font-semibold text-white  "
           >
             📸 我要出題
           </Link>
@@ -216,16 +216,16 @@ export function MyQuestions() {
       {status === "ready" && user && works.length > 0 ? (
         <>
           <section className="grid gap-3 sm:grid-cols-3" aria-label="創作者數據">
-            <article className="rounded-2xl border border-black/10 bg-white p-4 dark:border-white/15 dark:bg-zinc-950">
-              <p className="text-sm text-zinc-500">總出題數</p>
+            <article className="rounded-2xl border border-game-line bg-white p-4 dark:border-game-line dark:bg-game-panel">
+              <p className="text-sm text-game-muted">總出題數</p>
               <p className="mt-1 text-3xl font-black">{works.length} 道</p>
             </article>
-            <article className="rounded-2xl border border-black/10 bg-white p-4 dark:border-white/15 dark:bg-zinc-950">
-              <p className="text-sm text-zinc-500">總曝光 / 瀏覽次數</p>
+            <article className="rounded-2xl border border-game-line bg-white p-4 dark:border-game-line dark:bg-game-panel">
+              <p className="text-sm text-game-muted">總曝光 / 瀏覽次數</p>
               <p className="mt-1 text-3xl font-black">👁️ {totalViews.toLocaleString("zh-TW")} 次</p>
             </article>
-            <article className="rounded-2xl border border-black/10 bg-white p-4 dark:border-white/15 dark:bg-zinc-950">
-              <p className="text-sm text-zinc-500">平均瀏覽量</p>
+            <article className="rounded-2xl border border-game-line bg-white p-4 dark:border-game-line dark:bg-game-panel">
+              <p className="text-sm text-game-muted">平均瀏覽量</p>
               <p className="mt-1 text-3xl font-black">{averageViews.toLocaleString("zh-TW")} 次</p>
               {hottest > 0 ? (
                 <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
@@ -245,7 +245,7 @@ export function MyQuestions() {
             {works.map((work) => (
               <li
                 key={work.id}
-                className="flex gap-4 rounded-2xl border border-black/10 bg-white p-3 dark:border-white/15 dark:bg-zinc-950"
+                className="flex gap-4 rounded-2xl border border-game-line bg-white p-3 dark:border-game-line dark:bg-game-panel"
               >
                 <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-zinc-900">
                   <Image
@@ -266,14 +266,14 @@ export function MyQuestions() {
                         熱門
                       </span>
                     ) : null}
-                    <span className="text-xs text-zinc-500">{formatDate(work.createdAt)}</span>
+                    <span className="text-xs text-game-muted">{formatDate(work.createdAt)}</span>
                   </div>
                   <p className="truncate text-lg font-bold">{work.answer}</p>
-                  <div className="flex flex-wrap gap-2 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                  <div className="flex flex-wrap gap-2 text-xs font-medium text-game-muted dark:text-zinc-300">
                     <span className="rounded-full bg-zinc-100 px-2 py-1 dark:bg-white/10">
                       👁️ 瀏覽量：{work.viewCount.toLocaleString("zh-TW")} 次
                     </span>
-                    <span className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-400 dark:bg-white/10 dark:text-zinc-500">
+                    <span className="rounded-full bg-zinc-100 px-2 py-1 text-game-muted dark:bg-white/10 dark:text-game-muted">
                       👍 0 人好評 / 踩
                     </span>
                   </div>

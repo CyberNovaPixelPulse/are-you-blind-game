@@ -60,22 +60,22 @@ export default function GuidelinesPage() {
         <Link
           href="/"
           aria-label="返回首頁"
-          className="inline-flex h-9 w-fit items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] hover:text-zinc-950 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[.08] dark:hover:text-zinc-50"
+          className="inline-flex h-9 w-fit items-center gap-1 rounded-xl border border-game-line px-3 text-sm font-medium text-game-muted transition-colors hover:bg-black/[.04] hover:text-zinc-950 dark:border-game-line dark:text-zinc-300 dark:hover:bg-white/[.08] dark:hover:text-zinc-50"
         >
           <span aria-hidden="true">←</span>
           返回首頁
         </Link>
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl">出題與審查規範</h1>
-          <p className="max-w-xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+          <p className="max-w-xl text-sm leading-6 text-game-muted dark:text-game-muted">
             發布前會用 100 分制看這題。滿 60 分，而且沒有安全問題，才會寫進題庫。
           </p>
         </div>
       </header>
 
-      <section className="gm-reading-block border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950">
+      <section className="gm-reading-block border border-game-line bg-white p-5 dark:border-game-line dark:bg-game-panel">
         <p className="text-sm font-semibold">通過門檻</p>
-        <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+        <p className="mt-2 text-sm leading-6 text-game-muted dark:text-game-muted">
           四項加總 0 到 100 分。60 分以上可以發布。低於 60 分會停在出題頁，並附上盲猜結果和改善建議。
         </p>
       </section>
@@ -84,18 +84,18 @@ export default function GuidelinesPage() {
         {criteria.map((item, index) => (
           <li
             key={item.title}
-            className="gm-reading-block border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950"
+            className="gm-reading-block border border-game-line bg-white p-5 dark:border-game-line dark:bg-game-panel"
           >
             <div className="flex items-start justify-between gap-3">
               <h2 className="text-lg font-semibold">
                 {index + 1}. {item.title}
               </h2>
-              <span className="shrink-0 rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
+              <span className="shrink-0 rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-game-muted dark:bg-white/10 dark:text-zinc-300">
                 {item.score}
               </span>
             </div>
             <p className="mt-2 text-sm font-medium">{item.summary}</p>
-            <ul className="mt-3 flex flex-col gap-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+            <ul className="mt-3 flex flex-col gap-2 text-sm leading-6 text-game-muted dark:text-game-muted">
               {item.points.map((point) => (
                 <li key={point}>{point}</li>
               ))}

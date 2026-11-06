@@ -113,8 +113,7 @@ export const TAUNT_MEME_COUNT = memes.length;
 export function TauntMeme({ index }: { index: number }) {
   const meme = memes[index % memes.length] ?? memes[0];
   return (
-    <div className="relative mx-auto mt-4 aspect-[4/3] w-full overflow-hidden rounded-2xl border border-white/15 bg-gradient-to-b from-zinc-800 to-zinc-900 p-3 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]">
-      <div className="pointer-events-none absolute inset-6 rounded-full bg-red-500/20 blur-2xl" />
+    <div className="relative mx-auto mt-4 aspect-[4/3] w-full overflow-hidden rounded-2xl border border-game-line bg-game-panel p-3 ">
       <div className="relative flex h-full items-center justify-center">
         {meme.svg}
       </div>
@@ -184,7 +183,7 @@ export function QuestionReportButton({
             <p
               key={reportTick}
               role="status"
-              className="animate-toast-in rounded-full bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg"
+              className="animate-toast-in rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white "
             >
               已收到回報，感謝協助維護題庫！
             </p>
@@ -195,7 +194,7 @@ export function QuestionReportButton({
             <Modal
               onDismiss={closeReport}
               aria-labelledby="report-title"
-              className="overscroll-contain animate-taunt-pop max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-white/10 bg-zinc-950 p-5 text-zinc-50 shadow-2xl"
+              className="overscroll-contain animate-taunt-pop max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-game-line bg-game-panel p-5 text-foreground "
             >
               <h2 id="report-title" className="text-xl font-bold">
                 回報這題
@@ -212,8 +211,8 @@ export function QuestionReportButton({
                       onClick={() => setReason(item)}
                       className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
                         selected
-                          ? "border-red-400 bg-red-500/20 text-white"
-                          : "border-white/10 bg-zinc-900 text-zinc-200 hover:border-white/25"
+                          ? "border-game-accent bg-game-selected text-foreground"
+                          : "border-game-line bg-game-panel text-foreground hover:border-game-accent"
                       }`}
                     >
                       {item}
@@ -232,10 +231,10 @@ export function QuestionReportButton({
                 rows={4}
                 maxLength={500}
                 disabled={submitting}
-                className="mt-4 w-full resize-none rounded-xl border border-white/10 bg-zinc-900 px-3 py-3 text-sm leading-6 text-zinc-50 outline-none placeholder:text-zinc-500 focus:border-red-400/60"
+                className="mt-4 w-full resize-none rounded-xl border border-game-line bg-game-panel px-3 py-3 text-sm leading-6 text-foreground outline-none placeholder:text-game-muted focus:border-red-400/60"
               />
               {reportError ? (
-                <p role="alert" className="mt-3 text-sm text-red-400">
+                <p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-400">
                   {reportError}
                 </p>
               ) : null}
@@ -243,7 +242,7 @@ export function QuestionReportButton({
                 type="button"
                 disabled={!reason || submitting}
                 onClick={() => void submitReport()}
-                className="mt-4 h-12 w-full rounded-xl bg-gradient-to-r from-red-500 to-orange-400 text-sm font-bold text-white transition disabled:opacity-50 active:scale-95"
+                className="mt-4 h-12 w-full rounded-xl bg-game-accent text-sm font-bold text-white transition disabled:opacity-50 active:scale-95"
               >
                 {submitting ? "送出中…" : "送出回報"}
               </button>
@@ -251,7 +250,7 @@ export function QuestionReportButton({
                 type="button"
                 disabled={submitting}
                 onClick={closeReport}
-                className="mt-2 h-12 w-full rounded-xl text-sm font-medium text-zinc-400 transition hover:text-zinc-200 disabled:opacity-50"
+                className="mt-2 h-12 w-full rounded-xl text-sm font-medium text-game-muted transition hover:text-foreground disabled:opacity-50"
               >
                 取消
               </button>
@@ -297,21 +296,21 @@ export function TauntDialog({
       <Modal
         onDismiss={onGiveUp}
         aria-labelledby="taunt-title"
-        className="overscroll-contain animate-taunt-pop max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-red-500/30 bg-zinc-950/95 p-5 text-zinc-50 shadow-2xl shadow-red-500/20"
+        className="overscroll-contain animate-taunt-pop max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-red-500/30 bg-game-panel p-5 text-foreground  shadow-red-500/20"
       >
-        <h2 id="taunt-title" className="text-center text-2xl font-extrabold tracking-tight text-red-400">
+        <h2 id="taunt-title" className="text-center text-2xl font-extrabold tracking-tight text-red-700 dark:text-red-400">
           {t("wrong")}
         </h2>
-        <p className="mt-1 text-center text-sm font-semibold text-zinc-400">{badge}</p>
+        <p className="mt-1 text-center text-sm font-semibold text-game-muted">{badge}</p>
         <div className="mt-4 flex flex-col gap-2 text-sm font-semibold leading-6">
-          <p className="rounded-xl border border-red-400/40 bg-red-500/15 px-3 py-2 text-red-100">
+          <p className="rounded-xl border border-red-400/40 bg-red-500/15 px-3 py-2 text-red-800 dark:text-red-100">
             ❌ 你的選擇：{pickedText}
           </p>
-          <p className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-3 py-2 text-emerald-100">
+          <p className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-3 py-2 text-emerald-800 dark:text-emerald-100">
             ✅ 正確答案：{answerText}
           </p>
         </div>
-        <blockquote className="mt-3 rounded-2xl border border-amber-300/40 bg-amber-300/15 px-4 py-3 text-center text-xl font-bold leading-8 text-amber-100 shadow-[0_0_28px_rgba(251,191,36,0.22)]">
+        <blockquote className="mt-3 rounded-2xl border border-game-line bg-game-selected px-4 py-3 text-center text-xl font-bold leading-8 text-foreground ">
           「{taunt}」
         </blockquote>
         <TauntMeme index={index} />
@@ -331,14 +330,14 @@ export function TauntDialog({
           type="button"
           data-modal-initial-focus
           onClick={onGiveUp}
-          className="mt-5 h-14 w-full rounded-2xl bg-gradient-to-r from-red-500 via-orange-500 to-amber-400 text-base font-bold text-white shadow-lg shadow-orange-500/30 transition duration-150 hover:brightness-110 active:scale-95"
+          className="mt-5 h-14 w-full rounded-2xl bg-game-accent text-base font-bold text-white   transition duration-150 hover:brightness-110 active:scale-95"
         >
           {t("next")}
         </button>
         <QuestionReportButton
           questionId={questionId}
           label={`🚩 ${t("report")}`}
-          className="mt-3 w-full text-center text-xs font-medium text-zinc-500 transition hover:text-zinc-300"
+          className="mt-3 w-full text-center text-xs font-medium text-game-muted transition hover:text-foreground"
         />
       </Modal>
     </div>

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Anton, Geist, Geist_Mono, Noto_Sans_TC } from "next/font/google";
 import { SkipToContent } from "@/components/skip-to-content";
 import { LanguageProvider } from "@/components/language-provider";
 import { siteDescription, siteName, siteUrl } from "@/lib/seo";
@@ -15,6 +15,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const gameSans = Noto_Sans_TC({ variable: "--font-game-sans", subsets: ["latin"], display: "swap", preload: false });
+
+const c2Display = Anton({ variable: "--font-c2-display", weight: "400", subsets: ["latin"], display: "swap" });
+
 export const metadata: Metadata = {
   metadataBase: siteUrl,
   title: { default: `${siteName}｜線上猜圖遊戲`, template: `%s｜${siteName}` },
@@ -24,8 +28,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+    { media: "(prefers-color-scheme: light)", color: "#ffe14d" },
+    { media: "(prefers-color-scheme: dark)", color: "#ffe14d" },
   ],
 };
 
@@ -33,7 +37,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="zh-Hant"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${gameSans.variable} ${c2Display.variable} ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
         <script

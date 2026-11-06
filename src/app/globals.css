@@ -1,15 +1,49 @@
 @import "tailwindcss";
 
+/* C2 meme-poster theme is light-only for now: dark: utilities only apply under an explicit .dark ancestor. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   color-scheme: light;
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #ffe14d;
+  --foreground: #111111;
+  --game-panel: #ffffff;
+  --game-line: #111111;
+  --game-muted: #3d3a33;
+  --game-accent: #c4260f;
+  --game-accent-hover: #9c1d0b;
+  --game-selected: #fff3b0;
+  --c2-ink: #111111;
+  --c2-shadow: 4px 4px 0 #111111;
+  --c2-shadow-lg: 6px 6px 0 #111111;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans), "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --font-sans: var(--font-game-sans), var(--font-geist-sans), sans-serif;
+  --font-display: var(--font-c2-display), var(--font-game-sans), sans-serif;
+  --color-game-accent: var(--game-accent);
+  --color-game-accent-hover: var(--game-accent-hover);
+  --color-game-panel: var(--game-panel);
+  --color-game-line: var(--game-line);
+  --color-game-muted: var(--game-muted);
+  --color-game-selected: var(--game-selected);
+  --color-zinc-950: #111111;
+  --color-zinc-900: #1f1f1f;
+  --color-zinc-800: #2e2e2e;
+  --color-zinc-700: #3d3d3d;
+  --color-zinc-600: #4a4a4a;
+  --color-zinc-500: #5a5a5a;
+  --color-zinc-400: #8a8a8a;
+  --color-zinc-300: #b3b3b3;
+  --color-zinc-200: #d6d6d6;
+  --color-zinc-100: #f3eedc;
+  --color-zinc-50: #fffbe6;
+  --radius-3xl: 0px;
+  --radius-2xl: 0px;
+  --radius-xl: 0px;
+  --radius-lg: 0px;
   --font-mono: var(--font-geist-mono);
   --animate-taunt-backdrop: taunt-backdrop 0.2s ease-out both;
   --animate-taunt-pop: taunt-pop 0.68s cubic-bezier(0.34, 1.45, 0.64, 1) both;
@@ -27,25 +61,39 @@
   --animate-ladder-gold: ladder-gold 2.8s linear infinite;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  scrollbar-color: #111111 var(--background);
+  caret-color: var(--game-accent);
+}
+
+::selection { background: #111111; color: #ffe14d; }
+
+:is(button, a).bg-game-accent { border: 3px solid var(--c2-ink); box-shadow: var(--c2-shadow); font-weight: 900; }
+:is(button, a).bg-game-accent:hover:not(:disabled) { background: var(--game-accent-hover); }
+:is(button, a).bg-game-accent:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--c2-ink); }
+
+@layer components {
+  .game-action { background: var(--game-accent); color: #fff; border: 3px solid var(--c2-ink); border-radius: 0; box-shadow: var(--c2-shadow); font-weight: 900; }
+  .game-action:hover:not(:disabled) { background: var(--game-accent-hover); }
+  .game-panel { background: var(--game-panel); border: 3px solid var(--game-line); border-radius: 0; box-shadow: var(--c2-shadow); }
+  .game-dialog { color: var(--foreground); background: var(--game-panel); border: 4px solid var(--game-line); border-radius: 0; box-shadow: var(--c2-shadow-lg); }
+  .game-reading { max-width: 75ch; }
+  .game-question-stage { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 1rem; padding-block: 1rem; }
+  @media (min-width: 900px) {
+    .game-question-stage { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr); align-items: center; gap: 2.5rem; }
+    .game-question-image { width: 100%; max-width: 480px; }
+    .game-question-answers { width: 100%; max-width: none; }
+  }
 }
 
 /* Visual rhythm is opt-in; game state colors and image/crop geometry stay local. */
 @layer components {
   .gm-page {
-    --gm-line: rgb(23 23 23 / 0.12);
-    --gm-field: #fafafa;
+    --gm-line: var(--game-line);
+    --gm-field: var(--game-panel);
     font-variant-numeric: tabular-nums;
   }
 
@@ -87,58 +135,31 @@ body {
     padding-block-end: 0.5rem;
     border-block-end: 1px solid var(--gm-line);
   }
-
-  .gm-lobby-title {
-    position: relative;
-    max-width: 100%;
-    padding: 1.25rem 1rem;
-    font-size: clamp(2.5rem, 7vw, 4rem);
-    line-height: 1.15;
-    letter-spacing: -0.055em;
-    overflow-wrap: anywhere;
-  }
-
-  .gm-lobby-title::before, .gm-lobby-title::after {
-    content: "";
-    position: absolute;
-    inset-block: 0;
-    width: 1rem;
-    border-block: 3px solid currentColor;
-    pointer-events: none;
-  }
-
-  .gm-lobby-title::before {
-    inset-inline-start: 0;
-    border-inline-start: 3px solid currentColor;
-  }
-
-  .gm-lobby-title::after {
-    inset-inline-end: 0;
-    border-inline-end: 3px solid currentColor;
-  }
-
-  .gm-start {
-    box-shadow: 0 3px 0 rgb(113 113 122 / 0.35);
-  }
-
-  .gm-mode {
-    text-align: start;
-  }
-
-
-  @media (prefers-color-scheme: dark) {
-    .gm-page {
-      --gm-line: rgb(255 255 255 / 0.16);
-      --gm-field: #18181b;
-    }
-  }
 }
+
+/* C2: heavier ink on shared page chrome. Unlayered so it wins over Tailwind utilities. */
+.gm-page h1 { font-weight: 900; letter-spacing: -0.03em; }
+.gm-page .border { border-width: 2px; }
+.gm-page :is(input:not([type="radio"]):not([type="checkbox"]), textarea, select) { border-width: 3px; border-color: var(--c2-ink); }
+.gm-game > header { border-block-end-width: 3px; border-color: var(--c2-ink); }
+.game-question-image { border: 4px solid var(--c2-ink); box-shadow: var(--c2-shadow-lg); transform: rotate(-1.5deg); }
+.game-question-answers button.border { border-width: 3px; border-color: var(--c2-ink); box-shadow: var(--c2-shadow); font-weight: 900; }
+.game-question-answers button.border:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--c2-ink); }
+@media (prefers-reduced-motion: reduce) { .game-question-image { transform: none; } }
 
 @layer base {
   :where(a, button, input, select, textarea, [tabindex]):focus-visible {
-    outline: 2px solid currentColor;
+    outline: 3px solid #111111;
     outline-offset: 4px;
   }
+}
+
+/* Question geometry only changes on desktop; small-screen scroll behavior stays native. */
+@media (min-width: 900px) {
+  .gm-game .game-question-image { width: 100%; max-width: 480px; }
+  .gm-game .game-question-answers { width: 100%; max-width: none; }
+  .game-pk-stage { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr); column-gap: 2.5rem; align-content: center; }
+  .game-pk-stage > :not(.game-question-image):not(.game-question-answers) { grid-column: 1 / -1; }
 }
 
 @keyframes quiz-reveal {

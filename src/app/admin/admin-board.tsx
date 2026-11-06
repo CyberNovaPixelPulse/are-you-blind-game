@@ -49,7 +49,7 @@ function statusChipClass(question: {
 }) {
   if (isReportHidden(question)) return "bg-red-600 text-white";
   if (question.status === "active") return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300";
-  return "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300";
+  return "bg-zinc-500/15 text-game-muted dark:text-zinc-300";
 }
 
 type DraftOption = {
@@ -88,7 +88,7 @@ function scoreBadgeLabel(question: AdminQuestion) {
 
 function scoreBadgeClass(question: AdminQuestion) {
   if (!hasStoredScore(question) || question.qualityScore === null) {
-    return "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300";
+    return "bg-zinc-100 text-game-muted dark:bg-zinc-800 dark:text-zinc-300";
   }
   if (question.qualityScore >= 85) return "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200";
   if (question.qualityScore >= 60) return "bg-amber-400/20 text-amber-800 dark:text-amber-200";
@@ -160,9 +160,9 @@ function readDiagnosis(question: AdminQuestion): Diagnosis | null {
 }
 
 function totalBadgeClass(score: number) {
-  if (score >= 85) return "bg-emerald-500/20 text-emerald-200";
+  if (score >= 85) return "bg-emerald-500/20 text-emerald-800 dark:text-emerald-100";
   if (score >= 60) return "bg-amber-400/20 text-amber-200";
-  return "bg-red-500/20 text-red-200";
+  return "bg-red-500/20 text-red-800 dark:text-red-100";
 }
 
 function totalBadgeMark(score: number) {
@@ -840,11 +840,11 @@ export function AdminBoard({
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="gm-page-header flex flex-wrap items-end justify-between gap-4">
           <div>
-            <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-50">
+            <Link href="/" className="text-sm text-game-muted hover:text-zinc-950 dark:hover:text-zinc-50">
               回猜題首頁
             </Link>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">題目審查</h1>
-            <p className="mt-1 text-sm text-zinc-500">
+            <p className="mt-1 text-sm text-game-muted">
               {boardQuestions.length} 題 · 檢舉 {reportTotal} 次
               {serverWrites ? " · 可管理所有題目" : sessionEmail ? ` · ${sessionEmail}` : " · 尚未登入作者帳號"}
             </p>
@@ -852,7 +852,7 @@ export function AdminBoard({
               <button
                 type="button"
                 onClick={() => void signOut()}
-                className="mt-2 text-sm text-zinc-500 underline-offset-2 hover:underline"
+                className="mt-2 text-sm text-game-muted underline-offset-2 hover:underline"
               >
                 登出這個帳號
               </button>
@@ -866,7 +866,7 @@ export function AdminBoard({
             >
               <button
                 type="submit"
-                className="h-9 rounded-full border border-black/10 px-4 text-sm font-medium text-zinc-600 hover:bg-black/[.04] dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[.08]"
+                className="h-9 rounded-xl border border-game-line px-4 text-sm font-medium text-game-muted hover:bg-black/[.04] dark:border-game-line dark:text-zinc-300 dark:hover:bg-white/[.08]"
               >
                 鎖定後台
               </button>
@@ -876,7 +876,7 @@ export function AdminBoard({
             type="button"
             disabled={generating}
             onClick={() => void autoGenerate()}
-            className="h-12 rounded-full bg-gradient-to-r from-violet-600 to-blue-600 px-5 text-sm font-semibold text-white shadow-md shadow-violet-600/30 disabled:opacity-60"
+            className="h-12 rounded-xl bg-game-accent px-5 text-sm font-semibold text-white  disabled:opacity-60"
           >
             {generating ? "AI 正在繪圖與命題中..." : "🤖 AI 一鍵出題"}
           </button>
@@ -890,7 +890,7 @@ export function AdminBoard({
 
         {!serverWrites && !sessionEmail ? (
           <form
-            className="flex flex-wrap items-end gap-3 rounded-2xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-zinc-900"
+            className="flex flex-wrap items-end gap-3 rounded-2xl border border-game-line bg-white p-4 dark:border-game-line dark:bg-game-panel"
             onSubmit={(event) => {
               event.preventDefault();
               void signIn();
@@ -906,7 +906,7 @@ export function AdminBoard({
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
-                className="h-11 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-white/15"
+                className="h-11 rounded-xl border border-game-line bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-game-line"
               />
             </label>
             <label className="flex min-w-40 flex-1 flex-col gap-1 text-sm font-medium">
@@ -918,13 +918,13 @@ export function AdminBoard({
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
-                className="h-11 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-white/15"
+                className="h-11 rounded-xl border border-game-line bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-game-line"
               />
             </label>
             <button
               type="submit"
               disabled={authPending}
-              className="h-11 rounded-full bg-foreground px-5 text-sm font-semibold text-background disabled:opacity-50"
+              className="h-11 rounded-xl bg-foreground px-5 text-sm font-semibold text-background disabled:opacity-50"
             >
               {authPending ? "登入中…" : "登入後才能改題"}
             </button>
@@ -932,14 +932,14 @@ export function AdminBoard({
           </form>
         ) : null}
 
-        <div className="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
+        <div className="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-game-line bg-white p-4 dark:border-game-line dark:bg-game-panel">
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1 text-sm font-medium">
               排序
               <select
                 value={sortKey}
                 onChange={(event) => setSortKey(event.target.value as typeof sortKey)}
-                className="h-11 min-w-64 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-white/15"
+                className="h-11 min-w-64 rounded-xl border border-game-line bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-game-line"
               >
                 <option value="reports">🚨 被檢舉次數（高到低）</option>
                 <option value="newest">🕒 建立時間（最新到最舊）</option>
@@ -953,7 +953,7 @@ export function AdminBoard({
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
-                className="h-11 min-w-44 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-white/15"
+                className="h-11 min-w-44 rounded-xl border border-game-line bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-game-line"
               >
                 <option value="all">全部</option>
                 <option value="active">已上架 (active)</option>
@@ -967,7 +967,7 @@ export function AdminBoard({
                 onChange={(event) =>
                   setDifficultyFilter(event.target.value as typeof difficultyFilter)
                 }
-                className="h-11 min-w-36 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-white/15"
+                className="h-11 min-w-36 rounded-xl border border-game-line bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-game-line"
               >
                 <option value="all">全部</option>
                 {DIFFICULTIES.map((level) => (
@@ -985,7 +985,7 @@ export function AdminBoard({
                   const next = event.target.value;
                   if (next === "all" || isLanguageCode(next)) setLanguageFilter(next);
                 }}
-                className="h-11 min-w-64 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-white/15"
+                className="h-11 min-w-64 rounded-xl border border-game-line bg-transparent px-3 font-normal outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500 dark:border-game-line"
               >
                 <option value="all">全部語言 (All Languages)</option>
                 {SUPPORTED_LANGUAGES.map((item) => (
@@ -999,18 +999,18 @@ export function AdminBoard({
               type="button"
               disabled={visible.length === 0}
               onClick={toggleVisibleSelection}
-              className="h-11 rounded-xl border border-black/10 px-4 text-sm font-semibold disabled:opacity-40 dark:border-white/15"
+              className="h-11 rounded-xl border border-game-line px-4 text-sm font-semibold disabled:opacity-40 dark:border-game-line"
             >
               {allVisibleSelected ? "取消全選" : "全選"}
             </button>
           </div>
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-game-muted">
             共 {boardQuestions.length} 道題目（目前篩選出 {visible.length} 道）
           </p>
         </div>
 
         {visible.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-black/15 px-4 py-10 text-center text-sm text-zinc-500">
+          <p className="rounded-2xl border border-dashed border-game-line px-4 py-10 text-center text-sm text-game-muted">
             {boardQuestions.length === 0 ? "目前沒有題目。" : "沒有符合這個篩選的題目。"}
           </p>
         ) : (
@@ -1022,10 +1022,10 @@ export function AdminBoard({
               return (
                 <div
                   key={question.id}
-                  className={`relative flex flex-col overflow-hidden rounded-2xl border bg-white text-left dark:bg-zinc-900 ${
+                  className={`relative flex flex-col overflow-hidden rounded-2xl border bg-white text-left dark:bg-game-panel ${
                     checked.has(question.id)
                       ? "border-red-400"
-                      : "border-black/10 dark:border-white/10"
+                      : "border-game-line dark:border-game-line"
                   }`}
                 >
                   <label className="absolute top-2 left-2 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg bg-black/65">
@@ -1097,7 +1097,7 @@ export function AdminBoard({
           <Modal
             onDismiss={requestClose}
             aria-labelledby="review-title"
-            className="overscroll-contain max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-white/10 bg-zinc-950 p-5 text-zinc-50 shadow-2xl"
+            className="overscroll-contain max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-game-line bg-game-panel p-5 text-foreground "
             onClick={(event) => event.stopPropagation()}
           >
             {(() => {
@@ -1109,7 +1109,7 @@ export function AdminBoard({
               const shownDifficulty = editing && draft ? draft.difficulty : question.difficulty;
               const shownStatus = editing && draft ? draft.status : question.status;
               const fieldClass =
-                "mt-1 w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm font-normal text-zinc-50 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-300";
+                "mt-1 w-full rounded-xl border border-game-line bg-game-panel px-3 py-2 text-sm font-normal text-foreground outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-game-accent";
               return (
                 <>
                   <div className="flex items-start justify-between gap-3">
@@ -1117,7 +1117,7 @@ export function AdminBoard({
                       <h2 id="review-title" className="text-xl font-bold">
                         {correct[0]?.text || "尚未設定正解"}
                       </h2>
-                      <p className="mt-1 text-sm text-zinc-400">
+                      <p className="mt-1 text-sm text-game-muted">
                         {question.authorName} · {formatWhen(question.createdAt)}
                         {editing ? " · 編輯模式" : " · 檢視模式"}
                       </p>
@@ -1127,7 +1127,7 @@ export function AdminBoard({
                         <button
                           type="button"
                           onClick={beginEdit}
-                          className="h-10 rounded-full bg-white px-4 text-sm font-semibold text-zinc-950"
+                          className="h-10 rounded-xl bg-white px-4 text-sm font-semibold text-zinc-950"
                         >
                           ✏️ 編輯內容
                         </button>
@@ -1135,7 +1135,7 @@ export function AdminBoard({
                       <button
                         type="button"
                         onClick={requestClose}
-                        className="h-10 rounded-full px-4 text-sm font-semibold text-zinc-300 hover:bg-white/10"
+                        className="h-10 rounded-xl px-4 text-sm font-semibold text-game-muted hover:bg-white/10"
                       >
                         關閉彈窗
                       </button>
@@ -1153,7 +1153,7 @@ export function AdminBoard({
                           className="object-cover"
                         />
                       </div>
-                      <figcaption className="text-center text-xs text-zinc-400">特寫圖</figcaption>
+                      <figcaption className="text-center text-xs text-game-muted">特寫圖</figcaption>
                     </figure>
                     <figure className="flex flex-col gap-2">
                       <div className="relative aspect-square overflow-hidden rounded-2xl bg-zinc-900">
@@ -1165,19 +1165,19 @@ export function AdminBoard({
                           className="object-contain"
                         />
                       </div>
-                      <figcaption className="text-center text-xs text-zinc-400">完整原圖</figcaption>
+                      <figcaption className="text-center text-xs text-game-muted">完整原圖</figcaption>
                     </figure>
                   </div>
 
                   <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {correct.length === 0 && distractors.length === 0 ? (
-                      <p className="text-sm text-zinc-400">這題的 options 是空的。</p>
+                      <p className="text-sm text-game-muted">這題的 options 是空的。</p>
                     ) : null}
                     {correct.map((option) =>
                       editing && draft ? (
                         <div
                           key={option.id}
-                          className="rounded-2xl bg-emerald-500/15 px-4 py-3 text-emerald-100"
+                          className="rounded-2xl bg-emerald-500/15 px-4 py-3 text-emerald-800 dark:text-emerald-100"
                         >
                           <label className="block text-sm font-semibold">
                             正解名稱
@@ -1206,7 +1206,7 @@ export function AdminBoard({
                       ) : (
                         <div
                           key={option.id}
-                          className="rounded-2xl bg-emerald-500/15 px-4 py-3 text-emerald-200"
+                          className="rounded-2xl bg-emerald-500/15 px-4 py-3 text-emerald-800 dark:text-emerald-100"
                         >
                           <p className="font-semibold">正解 · {option.text}</p>
                           {option.tauntText ? (
@@ -1217,7 +1217,7 @@ export function AdminBoard({
                     )}
                     {distractors.map((option) =>
                       editing && draft ? (
-                        <div key={option.id} className="rounded-2xl bg-red-500/10 px-4 py-3 text-red-100">
+                        <div key={option.id} className="rounded-2xl bg-red-500/10 px-4 py-3 text-red-800 dark:text-red-100">
                           <label className="block text-sm font-semibold">
                             干擾選項
                             <input
@@ -1243,7 +1243,7 @@ export function AdminBoard({
                           </label>
                         </div>
                       ) : (
-                        <div key={option.id} className="rounded-2xl bg-red-500/10 px-4 py-3 text-red-200">
+                        <div key={option.id} className="rounded-2xl bg-red-500/10 px-4 py-3 text-red-800 dark:text-red-100">
                           <p className="font-semibold">{option.text}</p>
                           <p className="mt-1 text-sm leading-6">
                             {option.tauntText ? `「${option.tauntText}」` : "（沒有毒舌評語）"}
@@ -1255,7 +1255,7 @@ export function AdminBoard({
 
                   <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
-                      <p id="review-difficulty-label" className="text-sm text-zinc-400">難度</p>
+                      <p id="review-difficulty-label" className="text-sm text-game-muted">難度</p>
                       {editing && draft ? (
                         <select
                           aria-labelledby="review-difficulty-label"
@@ -1266,7 +1266,7 @@ export function AdminBoard({
                             if (!isDifficulty(value)) return;
                             setDraft({ ...draft, difficulty: value });
                           }}
-                          className="mt-2 h-11 w-full rounded-xl border border-white/15 bg-zinc-900 px-3 text-sm font-semibold"
+                          className="mt-2 h-11 w-full rounded-xl border border-game-line bg-zinc-900 px-3 text-sm font-semibold"
                         >
                           {DIFFICULTIES.map((level) => (
                             <option key={level} value={level}>
@@ -1281,7 +1281,7 @@ export function AdminBoard({
                       )}
                     </div>
                     <div>
-                      <p className="text-sm text-zinc-400">狀態</p>
+                      <p className="text-sm text-game-muted">狀態</p>
                       {editing && draft ? (
                         <button
                           type="button"
@@ -1295,7 +1295,7 @@ export function AdminBoard({
                           }
                           className={`mt-2 h-11 rounded-full px-4 text-sm font-semibold ${
                             draft.status === "active"
-                              ? "bg-emerald-500 text-white"
+                              ? "bg-emerald-700 text-white"
                               : "bg-zinc-600 text-white"
                           }`}
                         >
@@ -1308,8 +1308,8 @@ export function AdminBoard({
                               isReportHidden({ ...question, status: shownStatus })
                                 ? "bg-red-600 text-white"
                                 : shownStatus === "active"
-                                  ? "bg-emerald-500/15 text-emerald-300"
-                                  : "bg-zinc-500/20 text-zinc-300"
+                                  ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-100"
+                                  : "bg-zinc-500/20 text-game-muted"
                             }`}
                           >
                             {isReportHidden({ ...question, status: shownStatus })
@@ -1317,7 +1317,7 @@ export function AdminBoard({
                               : shownStatus}
                           </p>
                           {isReportHidden(question) ? (
-                            <p className="mt-2 text-xs leading-5 text-zinc-400">
+                            <p className="mt-2 text-xs leading-5 text-game-muted">
                               標記已解決後，再把狀態切回 active，這題就會回到題庫。
                             </p>
                           ) : null}
@@ -1326,13 +1326,13 @@ export function AdminBoard({
                     </div>
                   </div>
 
-                  <section className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <section className="mt-5 rounded-2xl border border-game-line bg-white/5 p-4">
                     <h3 className="text-sm font-semibold">🤖 AI 題庫診斷</h3>
                     {(() => {
                       const diagnosis = readDiagnosis(question);
                       if (!diagnosis) {
                         return (
-                          <p className="mt-3 text-sm leading-6 text-zinc-400">
+                          <p className="mt-3 text-sm leading-6 text-game-muted">
                             尚未產生細部評分。點下方「AI 重新診斷」產生 100 分細項。
                           </p>
                         );
@@ -1348,18 +1348,18 @@ export function AdminBoard({
                             <li className="rounded-xl bg-black/20 px-3 py-2">
                               <p className="font-semibold">盲猜測驗 {diagnosis.blind}/40</p>
                               {diagnosis.guesses.length > 0 ? (
-                                <ol className="mt-1 list-decimal space-y-1 pl-5 text-zinc-300">
+                                <ol className="mt-1 list-decimal space-y-1 pl-5 text-game-muted">
                                   {diagnosis.guesses.map((guess, index) => (
                                     <li key={`${guess}-${index}`}>{guess}</li>
                                   ))}
                                 </ol>
                               ) : (
-                                <p className="mt-1 text-zinc-400">沒有留下盲猜名稱。</p>
+                                <p className="mt-1 text-game-muted">沒有留下盲猜名稱。</p>
                               )}
                             </li>
                             <li className="rounded-xl bg-black/20 px-3 py-2">
                               <p className="font-semibold">視覺特徵度 {diagnosis.visual}/25</p>
-                              <p className="mt-1 text-zinc-300">
+                              <p className="mt-1 text-game-muted">
                                 {diagnosis.visualDetail || "尚未留下特徵清晰度評語。"}
                               </p>
                             </li>
@@ -1371,13 +1371,13 @@ export function AdminBoard({
                                 安全合規 {diagnosis.safety}/15 · {diagnosis.safetyOk ? "通過" : "未通過"}
                               </p>
                               {diagnosis.safetyDetail ? (
-                                <p className="mt-1 text-zinc-300">{diagnosis.safetyDetail}</p>
+                                <p className="mt-1 text-game-muted">{diagnosis.safetyDetail}</p>
                               ) : null}
                             </li>
                           </ul>
                           {diagnosis.suggestion ? (
-                            <p className="rounded-xl bg-white/10 px-3 py-2 text-sm text-zinc-300">
-                              <span className="font-semibold text-zinc-200">AI 建議</span>
+                            <p className="rounded-xl bg-white/10 px-3 py-2 text-sm text-game-muted">
+                              <span className="font-semibold text-game-muted">AI 建議</span>
                               <span className="mt-1 block">{diagnosis.suggestion}</span>
                             </p>
                           ) : null}
@@ -1388,12 +1388,12 @@ export function AdminBoard({
                       type="button"
                       disabled={pending}
                       onClick={() => void rediagnose(question)}
-                      className="mt-4 h-10 rounded-full border border-white/15 px-4 text-sm font-semibold disabled:opacity-40"
+                      className="mt-4 h-10 rounded-xl border border-game-line px-4 text-sm font-semibold disabled:opacity-40"
                     >
                       {pending ? "診斷中…" : "🤖 AI 重新診斷"}
                     </button>
                     {errors[question.id] ? (
-                      <p role="alert" className="mt-2 text-sm text-red-300">{errors[question.id]}</p>
+                      <p role="alert" className="mt-2 text-sm text-red-800 dark:text-red-100">{errors[question.id]}</p>
                     ) : null}
                   </section>
 
@@ -1404,22 +1404,22 @@ export function AdminBoard({
                         type="button"
                         disabled={pending || question.reports.length === 0}
                         onClick={() => setResolveTarget(question.id)}
-                        className="h-10 rounded-full bg-emerald-600 px-4 text-sm font-semibold text-white disabled:opacity-40"
+                        className="h-10 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white disabled:opacity-40"
                       >
                         ✅ 標記已解決（清空檢舉）
                       </button>
                     </div>
                     {question.reports.length === 0 ? (
-                      <p className="mt-2 text-sm text-zinc-400">沒有玩家回報。</p>
+                      <p className="mt-2 text-sm text-game-muted">沒有玩家回報。</p>
                     ) : (
                       <ul className="mt-2 flex max-h-48 flex-col gap-2 overflow-y-auto">
                         {question.reports.map((report) => (
                           <li key={report.id} className="rounded-xl bg-white/5 px-3 py-2 text-sm">
                             <p className="font-medium">{report.reason}</p>
-                            <p className="mt-1 leading-6 text-zinc-300">
+                            <p className="mt-1 leading-6 text-game-muted">
                               {report.details || "（未填說明）"}
                             </p>
-                            <p className="mt-1 text-xs text-zinc-500">{formatWhen(report.createdAt)}</p>
+                            <p className="mt-1 text-xs text-game-muted">{formatWhen(report.createdAt)}</p>
                           </li>
                         ))}
                       </ul>
@@ -1427,7 +1427,7 @@ export function AdminBoard({
                   </div>
 
                   {errors[question.id] ? (
-                    <p role="alert" className="mt-4 text-sm text-red-300">{errors[question.id]}</p>
+                    <p role="alert" className="mt-4 text-sm text-red-800 dark:text-red-100">{errors[question.id]}</p>
                   ) : null}
 
                   <div className="mt-5 flex flex-col gap-2 sm:flex-row">
@@ -1445,7 +1445,7 @@ export function AdminBoard({
                           type="button"
                           disabled={pending}
                           onClick={cancelEdit}
-                          className="h-12 flex-1 rounded-xl border border-white/15 text-sm font-semibold disabled:opacity-50"
+                          className="h-12 flex-1 rounded-xl border border-game-line text-sm font-semibold disabled:opacity-50"
                         >
                           取消編輯
                         </button>
@@ -1463,7 +1463,7 @@ export function AdminBoard({
                         <button
                           type="button"
                           onClick={requestClose}
-                          className="h-12 flex-1 rounded-xl border border-white/15 text-sm font-semibold"
+                          className="h-12 flex-1 rounded-xl border border-game-line text-sm font-semibold"
                         >
                           關閉彈窗
                         </button>
@@ -1482,19 +1482,19 @@ export function AdminBoard({
           <Modal
             onDismiss={() => setConfirming(null)}
             aria-labelledby="delete-title"
-            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950 shadow-2xl dark:bg-zinc-900 dark:text-zinc-50"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950  dark:bg-game-panel dark:text-zinc-50"
           >
             <h2 id="delete-title" className="text-lg font-semibold">
               刪除題目
             </h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+            <p className="mt-2 text-sm leading-6 text-game-muted dark:text-zinc-300">
               確定從資料庫刪除「{confirming.authorName}」的這題？此動作無法復原。
             </p>
             <div className="mt-5 flex gap-3">
               <button
                 type="button"
                 onClick={() => setConfirming(null)}
-                className="h-11 flex-1 rounded-xl border border-black/10 text-sm font-semibold dark:border-white/15"
+                className="h-11 flex-1 rounded-xl border border-game-line text-sm font-semibold dark:border-game-line"
               >
                 取消
               </button>
@@ -1523,26 +1523,26 @@ export function AdminBoard({
           <Modal
             onDismiss={() => setSaveConfirm(false)}
             aria-labelledby="save-title"
-            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950 shadow-2xl dark:bg-zinc-900 dark:text-zinc-50"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950  dark:bg-game-panel dark:text-zinc-50"
           >
             <h2 id="save-title" className="text-lg font-semibold">
               儲存修改
             </h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+            <p className="mt-2 text-sm leading-6 text-game-muted dark:text-zinc-300">
               確定要儲存對此題目的修改嗎？
             </p>
             <div className="mt-5 flex gap-3">
               <button
                 type="button"
                 onClick={() => setSaveConfirm(false)}
-                className="h-11 flex-1 rounded-xl border border-black/10 text-sm font-semibold dark:border-white/15"
+                className="h-11 flex-1 rounded-xl border border-game-line text-sm font-semibold dark:border-game-line"
               >
                 取消
               </button>
               <button
                 type="button"
                 onClick={() => void confirmSave()}
-                className="h-11 flex-1 rounded-xl bg-zinc-950 text-sm font-semibold text-white dark:bg-white dark:text-zinc-950"
+                className="h-11 flex-1 rounded-xl bg-game-accent text-sm font-semibold text-white dark:bg-game-accent dark:text-white"
               >
                 確定儲存
               </button>
@@ -1556,26 +1556,26 @@ export function AdminBoard({
           <Modal
             onDismiss={() => setLeaveConfirm(false)}
             aria-labelledby="leave-title"
-            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950 shadow-2xl dark:bg-zinc-900 dark:text-zinc-50"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950  dark:bg-game-panel dark:text-zinc-50"
           >
             <h2 id="leave-title" className="text-lg font-semibold">
               尚未儲存
             </h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+            <p className="mt-2 text-sm leading-6 text-game-muted dark:text-zinc-300">
               有未儲存的變更，確定要退出嗎？
             </p>
             <div className="mt-5 flex gap-3">
               <button
                 type="button"
                 onClick={() => setLeaveConfirm(false)}
-                className="h-11 flex-1 rounded-xl border border-black/10 text-sm font-semibold dark:border-white/15"
+                className="h-11 flex-1 rounded-xl border border-game-line text-sm font-semibold dark:border-game-line"
               >
                 繼續編輯
               </button>
               <button
                 type="button"
                 onClick={closeReview}
-                className="h-11 flex-1 rounded-xl bg-zinc-950 text-sm font-semibold text-white dark:bg-white dark:text-zinc-950"
+                className="h-11 flex-1 rounded-xl bg-game-accent text-sm font-semibold text-white dark:bg-game-accent dark:text-white"
               >
                 確定退出
               </button>
@@ -1589,19 +1589,19 @@ export function AdminBoard({
           <Modal
             onDismiss={() => setResolveTarget(null)}
             aria-labelledby="resolve-title"
-            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950 shadow-2xl dark:bg-zinc-900 dark:text-zinc-50"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950  dark:bg-game-panel dark:text-zinc-50"
           >
             <h2 id="resolve-title" className="text-lg font-semibold">
               清空檢舉
             </h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+            <p className="mt-2 text-sm leading-6 text-game-muted dark:text-zinc-300">
               確定要將這題的檢舉標記為已解決並清空嗎？畫面上的檢舉數會歸零。
             </p>
             <div className="mt-5 flex gap-3">
               <button
                 type="button"
                 onClick={() => setResolveTarget(null)}
-                className="h-11 flex-1 rounded-xl border border-black/10 text-sm font-semibold dark:border-white/15"
+                className="h-11 flex-1 rounded-xl border border-game-line text-sm font-semibold dark:border-game-line"
               >
                 取消
               </button>
@@ -1622,19 +1622,19 @@ export function AdminBoard({
           <Modal
             onDismiss={() => setBatchDeleteOpen(false)}
             aria-labelledby="batch-delete-title"
-            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950 shadow-2xl dark:bg-zinc-900 dark:text-zinc-50"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950  dark:bg-game-panel dark:text-zinc-50"
           >
             <h2 id="batch-delete-title" className="text-lg font-semibold">
               批次刪除
             </h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+            <p className="mt-2 text-sm leading-6 text-game-muted dark:text-zinc-300">
               確定要刪除這 {checkedQuestions.length} 道題目嗎？此動作不可還原
             </p>
             <div className="mt-5 flex gap-3">
               <button
                 type="button"
                 onClick={() => setBatchDeleteOpen(false)}
-                className="h-11 flex-1 rounded-xl border border-black/10 text-sm font-semibold dark:border-white/15"
+                className="h-11 flex-1 rounded-xl border border-game-line text-sm font-semibold dark:border-game-line"
               >
                 取消
               </button>
@@ -1652,14 +1652,14 @@ export function AdminBoard({
 
       {checkedQuestions.length > 0 ? (
         <div className="fixed inset-x-0 bottom-4 z-30 flex justify-center px-4">
-          <div className="flex w-full max-w-3xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/15 bg-zinc-950/80 px-4 py-3 text-white shadow-2xl backdrop-blur-md">
+          <div className="flex w-full max-w-3xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-game-line bg-game-accent px-4 py-3 text-white  backdrop-blur-md">
             <p className="text-sm font-semibold">已選中 {checkedQuestions.length} 題</p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 disabled={batchPending}
                 onClick={() => void batchSetStatus("hidden")}
-                className="h-10 rounded-full border border-white/20 px-4 text-sm font-semibold disabled:opacity-40"
+                className="h-10 rounded-xl border border-game-line px-4 text-sm font-semibold disabled:opacity-40"
               >
                 批次下架 (Hide)
               </button>
@@ -1667,7 +1667,7 @@ export function AdminBoard({
                 type="button"
                 disabled={batchPending}
                 onClick={() => void batchSetStatus("active")}
-                className="h-10 rounded-full border border-white/20 px-4 text-sm font-semibold disabled:opacity-40"
+                className="h-10 rounded-xl border border-game-line px-4 text-sm font-semibold disabled:opacity-40"
               >
                 批次上架 (Active)
               </button>
@@ -1675,19 +1675,19 @@ export function AdminBoard({
                 type="button"
                 disabled={batchPending}
                 onClick={() => setBatchDeleteOpen(true)}
-                className="h-10 rounded-full bg-red-600 px-4 text-sm font-semibold disabled:opacity-40"
+                className="h-10 rounded-xl bg-red-600 px-4 text-sm font-semibold disabled:opacity-40"
               >
                 批次刪除 (Delete)
               </button>
             </div>
-            {batchError ? <p role="alert" className="w-full text-sm text-red-300">{batchError}</p> : null}
+            {batchError ? <p role="alert" className="w-full text-sm font-semibold text-white">{batchError}</p> : null}
           </div>
         </div>
       ) : null}
 
       {toast ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
-          <p role="status" className="animate-toast-in rounded-full bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-lg">
+          <p role="status" className="animate-toast-in rounded-full bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white ">
             {toast}
           </p>
         </div>

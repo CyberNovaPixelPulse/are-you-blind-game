@@ -572,7 +572,7 @@ export default function ChallengePage() {
       <header className={`flex shrink-0 items-center justify-between gap-3 ${phase === "play" ? "mb-2" : "mb-4"}`}>
         <Link
           href="/"
-          className="inline-flex h-9 items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 dark:border-white/15 dark:text-zinc-300"
+          className="inline-flex h-9 items-center gap-1 rounded-xl border border-game-line px-3 text-sm font-medium text-game-muted dark:border-game-line dark:text-zinc-300"
         >
           <span aria-hidden="true">←</span>
           {t.challengeMode.backHome}
@@ -612,16 +612,13 @@ export default function ChallengePage() {
 
       {phase === "idle" ? (
         <section className="flex flex-1 flex-col justify-center gap-6">
-          <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-lg shadow-black/5 dark:border-white/15 dark:bg-zinc-950">
-            <p className="text-sm font-semibold tracking-[0.18em] text-amber-600 uppercase">
-              {dailyMode ? "每日挑戰" : t.challengeMode.badge}
-            </p>
-            <h1 className="mt-2 text-3xl font-black">⚡ {dailyMode ? "今日十題" : t.challengeMode.title}</h1>
-            {dailyMode ? <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">全站玩家每天挑戰同一組題目。{challengeDate ? ` 日期：${challengeDate}` : ""}</p> : null}
+          <div className="rounded-2xl border border-game-line bg-white p-6  shadow-black/5 dark:border-game-line dark:bg-game-panel">
+            <h1 className="mt-2 text-3xl font-black">{dailyMode ? "今日十題" : t.challengeMode.title}</h1>
+            {dailyMode ? <p className="mt-2 text-sm text-game-muted dark:text-game-muted">全站玩家每天挑戰同一組題目。{challengeDate ? ` 日期：${challengeDate}` : ""}</p> : null}
             {status === "empty" ? (
-              <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">還沒有可以挑戰的題目。</p>
+              <p className="mt-4 text-sm text-game-muted dark:text-game-muted">還沒有可以挑戰的題目。</p>
             ) : null}
-            <ul className="mt-4 flex flex-col gap-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+            <ul className="mt-4 flex flex-col gap-2 text-sm leading-6 text-game-muted dark:text-game-muted">
               <li>{t.challengeMode.rule1}</li>
               <li>{t.challengeMode.rule2}</li>
               <li>{t.challengeMode.rule3}</li>
@@ -629,7 +626,7 @@ export default function ChallengePage() {
             <button
               type="button"
               onClick={start}
-              className="mt-6 flex h-14 w-full items-center justify-center rounded-full bg-zinc-950 text-lg font-bold text-white dark:bg-zinc-50 dark:text-zinc-950"
+              className="mt-6 flex h-14 w-full items-center justify-center rounded-xl bg-game-accent text-lg font-bold text-white  "
             >
               {t.challengeMode.startBtn}
             </button>
@@ -638,13 +635,13 @@ export default function ChallengePage() {
       ) : null}
 
       {phase === "play" ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-4 py-3">
+        <div className="game-question-stage">
           <section className="flex w-full flex-col items-center">
             {status === "loading" && !question ? (
-              <p className="py-16 text-center text-sm text-zinc-500">{t("drawing")}</p>
+              <p className="py-16 text-center text-sm text-game-muted">{t("drawing")}</p>
             ) : null}
             {status === "empty" ? (
-              <p className="py-10 text-sm text-zinc-600 dark:text-zinc-400">還沒有可以挑戰的題目。</p>
+              <p className="py-10 text-sm text-game-muted dark:text-game-muted">還沒有可以挑戰的題目。</p>
             ) : null}
             {status === "error" ? (
               <p role="alert" className="py-10 text-sm text-red-600">
@@ -653,7 +650,7 @@ export default function ChallengePage() {
             ) : null}
             {status === "ready" && question ? (
               <div
-                className={`relative mx-auto aspect-square w-[min(100%,280px,calc(100dvh-340px))] max-w-[280px] overflow-hidden rounded-2xl shadow-2xl sm:w-[min(100%,320px,calc(100dvh-340px))] sm:max-w-[320px] ${
+                className={`game-question-image relative mx-auto aspect-square w-[min(100%,280px,calc(100dvh-340px))] max-w-[280px] overflow-hidden rounded-2xl  sm:w-[min(100%,320px,calc(100dvh-340px))] sm:max-w-[320px] ${
                   urgent ? "animate-challenge-alarm ring-4 ring-red-500" : ""
                 }`}
               >
@@ -667,7 +664,7 @@ export default function ChallengePage() {
               </div>
             ) : null}
           </section>
-          <section className="flex w-full max-w-[280px] shrink-0 flex-col gap-3 sm:max-w-[320px]">
+          <section className="game-question-answers flex w-full max-w-[280px] shrink-0 flex-col gap-3 sm:max-w-[320px]">
             {status === "ready"
               ? options.map((option) => (
                   <button
@@ -675,7 +672,7 @@ export default function ChallengePage() {
                     type="button"
                     onClick={() => onGuess(option)}
                     disabled={!clockRunning || answerLocked}
-                    className="rounded-2xl border border-black/10 bg-white px-4 py-3 text-left text-base font-medium disabled:opacity-60 dark:border-white/15 dark:bg-zinc-950"
+                    className="rounded-2xl border border-game-line bg-white px-4 py-3 text-left text-base font-medium disabled:opacity-60 dark:border-game-line dark:bg-game-panel"
                   >
                     {option.text}
                   </button>
@@ -683,13 +680,13 @@ export default function ChallengePage() {
               : null}
             {answerRetry && firstSubmissionRef.current ? (
               <button type="button" onClick={() => void onGuess(firstSubmissionRef.current!.option)}
-                className="h-14 rounded-full bg-zinc-950 text-white dark:bg-zinc-50 dark:text-zinc-950">重試答案</button>
+                className="h-14 rounded-xl bg-game-accent text-white  ">重試答案</button>
             ) : null}
             {status === "error" ? (
               <button
                 type="button"
                 onClick={() => void loadNext()}
-                className="h-14 rounded-full bg-zinc-950 text-base font-semibold text-white dark:bg-zinc-50 dark:text-zinc-950"
+                className="h-14 rounded-xl bg-game-accent text-base font-semibold text-white  "
               >
                 再試一次
               </button>
@@ -718,18 +715,18 @@ export default function ChallengePage() {
           <Modal
             onDismiss={() => leaveChallenge("home")}
             aria-labelledby="challenge-result-title"
-            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl bg-white p-5 text-zinc-950 shadow-xl dark:bg-zinc-950 dark:text-zinc-50"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950  dark:bg-game-panel dark:text-zinc-50"
           >
-            <p className="text-sm font-semibold text-zinc-500">
+            <p className="text-sm font-semibold text-game-muted">
               {endReason === "timeout" ? "時間到" : endReason === "clear" ? "題庫清空" : "挑戰結束"}
             </p>
             <h2 id="challenge-result-title" className="mt-1 text-2xl font-black">
               {endReason === "interrupted" ? "本次挑戰中斷" : "最終結算"}
             </h2>
             <p className="mt-4 text-4xl font-black tracking-tight">{score.toLocaleString("zh-TW")}</p>
-            <p className="text-sm text-zinc-500">挑戰總分</p>
+            <p className="text-sm text-game-muted">挑戰總分</p>
             <p className="mt-4 text-xl font-bold">連續答對 {streak} 題</p>
-            <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{endReason === "interrupted" ? "本次成績不會提交排行榜。" : reviewText(streak, endReason)}</p>
+            <p className="mt-2 text-sm leading-6 text-game-muted dark:text-zinc-300">{endReason === "interrupted" ? "本次成績不會提交排行榜。" : reviewText(streak, endReason)}</p>
             {rank ? <p className="mt-3 text-sm font-semibold">目前排行第 {rank} 名</p> : null}
             {saveState === "saved" ? (
               <p role="status" className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">已寫入排行榜</p>
@@ -743,7 +740,7 @@ export default function ChallengePage() {
                 <button
                   type="button"
                   onClick={signInToSave}
-                  className="mt-3 h-10 rounded-full bg-zinc-950 px-4 text-sm font-semibold text-white dark:bg-zinc-50 dark:text-zinc-950"
+                  className="mt-3 h-10 rounded-xl bg-game-accent px-4 text-sm font-semibold text-white  "
                 >
                   使用 Google 登入
                 </button>
@@ -765,21 +762,21 @@ export default function ChallengePage() {
               <button
                 type="button"
                 onClick={() => setLadderRequest((current) => current + 1)}
-                className="h-12 rounded-full border border-amber-400/60 text-base font-bold text-amber-800 dark:text-amber-200"
+                className="h-12 rounded-xl border border-amber-400/60 text-base font-bold text-amber-800 dark:text-amber-200"
               >
                 完整天梯榜 ➔
               </button>
               {endReason !== "interrupted" ? <button
                 type="button"
                 onClick={() => leaveChallenge("restart")}
-                className="h-12 rounded-full bg-zinc-950 text-base font-bold text-white dark:bg-zinc-50 dark:text-zinc-950"
+                className="h-12 rounded-xl bg-game-accent text-base font-bold text-white  "
               >
                 再挑戰一次
               </button> : null}
               <button
                 type="button"
                 onClick={() => leaveChallenge("home")}
-                className="flex h-12 items-center justify-center rounded-full border border-black/10 text-base font-semibold dark:border-white/15"
+                className="flex h-12 items-center justify-center rounded-xl border border-game-line text-base font-semibold dark:border-game-line"
               >
                 回到首頁
               </button>

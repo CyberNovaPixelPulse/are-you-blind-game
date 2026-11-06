@@ -174,12 +174,12 @@ export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create
             setUsername(displayName);
             setOpen(true);
           }}
-          className="flex max-w-full items-center gap-2 rounded-full border border-black/10 bg-white py-1 pr-3 pl-1 text-sm font-medium shadow-sm transition-colors hover:bg-zinc-50 dark:border-white/15 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+          className="flex max-w-full items-center gap-2 rounded-xl border border-game-line bg-white py-1 pr-3 pl-1 text-sm font-medium  transition-colors hover:bg-zinc-50 dark:border-game-line dark:bg-game-panel dark:hover:bg-zinc-900"
         >
           <UserAvatar
             src={avatarUrl}
             name={displayName}
-            className={`h-8 w-8 text-sm ${isVip ? "ring-2 ring-amber-300 shadow-[0_0_14px_rgba(251,191,36,0.9)]" : ""}`}
+            className={`h-8 w-8 text-sm ${isVip ? "ring-2 ring-game-accent" : ""}`}
           />
           <span className="max-w-32 truncate">{displayName}</span>
         </button>
@@ -189,7 +189,7 @@ export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create
           disabled={!ready || pending}
           onClick={signInWithGoogle}
           lang={account.lang}
-          className="min-h-11 rounded-full bg-zinc-950 px-4 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-950"
+          className="min-h-11 rounded-xl bg-game-accent px-4 py-2 text-sm font-semibold text-white  disabled:opacity-50  "
         >
           {account.text.google}
         </button>
@@ -208,7 +208,7 @@ export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create
           <Modal
             onDismiss={() => setOpen(false)}
             aria-labelledby="profile-settings-title"
-            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-3xl bg-white p-5 text-zinc-950 shadow-xl dark:bg-zinc-950 dark:text-zinc-50"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-sm rounded-2xl bg-white p-5 text-zinc-950  dark:bg-game-panel dark:text-zinc-50"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">
@@ -218,7 +218,7 @@ export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="h-9 rounded-full px-3 text-sm font-medium text-zinc-500 hover:bg-black/[.04] dark:hover:bg-white/[.08]"
+                className="h-9 rounded-xl px-3 text-sm font-medium text-game-muted hover:bg-black/[.04] dark:hover:bg-white/[.08]"
               >
                 關閉
               </button>
@@ -227,7 +227,7 @@ export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create
             <Link
               href="/profile"
               onClick={() => setOpen(false)}
-              className="mt-4 flex h-11 w-full items-center justify-center rounded-full bg-zinc-950 text-sm font-semibold text-white dark:bg-zinc-50 dark:text-zinc-950"
+              className="mt-4 flex h-11 w-full items-center justify-center rounded-xl bg-game-accent text-sm font-semibold text-white  "
             >
               🎨 我出的題目
             </Link>
@@ -236,7 +236,7 @@ export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create
               <UserAvatar
                 src={avatarUrl}
                 name={displayName}
-                className={`h-20 w-20 text-2xl ${isVip ? "ring-2 ring-amber-300 shadow-[0_0_14px_rgba(251,191,36,0.9)]" : ""}`}
+                className={`h-20 w-20 text-2xl ${isVip ? "ring-2 ring-game-accent" : ""}`}
               />
             </div>
             {isVip ? (
@@ -258,7 +258,7 @@ export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create
                 value={username}
                 maxLength={40}
                 onChange={(event) => setUsername(event.target.value)}
-                className="h-11 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus:border-zinc-950 dark:border-white/15 dark:focus:border-zinc-50"
+                className="h-11 rounded-xl border border-game-line bg-transparent px-3 font-normal outline-none focus:border-zinc-950 dark:border-game-line dark:focus:border-zinc-50"
               />
             </label>
 
@@ -273,14 +273,14 @@ export function AuthMenu({ redirectPath = "/" }: { redirectPath?: "/" | "/create
                 type="button"
                 disabled={saving}
                 onClick={saveProfile}
-                className="h-10 rounded-full bg-zinc-950 px-4 text-sm font-semibold text-white disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-950"
+                className="h-10 rounded-xl bg-game-accent px-4 text-sm font-semibold text-white disabled:opacity-50  "
               >
                 {saving ? "儲存中…" : "儲存暱稱"}
               </button>
               <button
                 type="button"
                 onClick={signOut}
-                className="h-10 rounded-full border border-black/10 px-4 text-sm font-medium dark:border-white/15"
+                className="h-10 rounded-xl border border-game-line px-4 text-sm font-medium dark:border-game-line"
               >
                 登出
               </button>

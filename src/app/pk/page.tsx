@@ -413,26 +413,26 @@ export default function PkLobbyPage() {
     <main id="main-content" tabIndex={-1} className="gm-page gm-workspace mx-auto flex min-h-screen w-full max-w-md flex-col gap-6 px-4 py-8">
       <Link
         href="/"
-        className="inline-flex h-9 w-fit items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 dark:border-white/15 dark:text-zinc-300"
+        className="inline-flex h-9 w-fit items-center gap-1 rounded-xl border border-game-line px-3 text-sm font-medium text-game-muted dark:border-game-line dark:text-zinc-300"
       >
         <span aria-hidden="true">←</span>
         {t.pkLobby.backHome}
       </Link>
       <header className="gm-page-header">
-        <h1 className="mt-1 text-3xl">⚔️ {t.pkLobby.title}</h1>
-        <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{t.pkLobby.subtitle}</p>
+        <h1 className="mt-1 text-3xl">{t.pkLobby.title}</h1>
+        <p className="mt-2 text-sm leading-6 text-game-muted dark:text-game-muted">{t.pkLobby.subtitle}</p>
       </header>
 
-      {!ready ? <p className="text-sm text-zinc-500">{t.pkLobby.checkingLogin}</p> : null}
+      {!ready ? <p className="text-sm text-game-muted">{t.pkLobby.checkingLogin}</p> : null}
 
       {ready && !user ? (
-        <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950">
+        <section className="rounded-2xl border border-game-line bg-white p-5 dark:border-game-line dark:bg-game-panel">
           <p className="text-base font-medium">{t.pkLobby.loginHint}</p>
           <button
             type="button"
             disabled={busy === "login"}
             onClick={() => void signIn()}
-            className="mt-4 h-12 w-full rounded-full bg-zinc-950 text-sm font-semibold text-white disabled:opacity-60 dark:bg-zinc-50 dark:text-zinc-950"
+            className="mt-4 h-12 w-full rounded-xl bg-game-accent text-sm font-semibold text-white disabled:opacity-60  "
           >
             {t("login")}
           </button>
@@ -445,10 +445,10 @@ export default function PkLobbyPage() {
             type="button"
             disabled={busy !== null}
             onClick={() => void matchRandom()}
-            className="rounded-2xl border border-amber-400/40 bg-amber-50 p-5 text-left disabled:opacity-60 dark:border-amber-300/30 dark:bg-amber-950/40"
+            className="rounded-2xl border border-game-accent bg-game-selected p-5 text-left disabled:opacity-60 dark:border-game-accent dark:bg-game-selected"
           >
-            <h2 className="text-xl font-bold">⚡ {t.pkLobby.randomMatchTitle}</h2>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-amber-100/80">{t.pkLobby.randomMatchDesc}</p>
+            <h2 className="text-xl font-bold">{t.pkLobby.randomMatchTitle}</h2>
+            <p className="mt-1 text-sm text-game-muted dark:text-game-muted">{t.pkLobby.randomMatchDesc}</p>
           </button>
           <button
             type="button"
@@ -456,17 +456,17 @@ export default function PkLobbyPage() {
             onClick={() => void createPrivate()}
             className={`relative rounded-2xl border p-5 text-left disabled:opacity-60 ${
               showVipLock
-                ? "border-amber-300/50 bg-zinc-100 text-zinc-500 dark:border-amber-200/20 dark:bg-zinc-900 dark:text-zinc-400"
-                : "border-black/10 bg-white dark:border-white/15 dark:bg-zinc-950"
+                ? "border-game-line bg-zinc-100 text-game-muted dark:border-game-line dark:bg-zinc-900 dark:text-game-muted"
+                : "border-game-line bg-white dark:border-game-line dark:bg-game-panel"
             }`}
           >
             {showVipLock ? (
-              <span className="mb-2 inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800 dark:bg-amber-400/20 dark:text-amber-200">
-                👑 {t.pkLobby.vipPrivilege}
+              <span className="mb-2 inline-flex rounded-full bg-game-selected px-2.5 py-1 text-xs font-bold text-game-accent dark:bg-amber-400/20 dark:text-amber-200">
+                {t.pkLobby.vipPrivilege}
               </span>
             ) : null}
-            <h2 className="text-xl font-bold">🏠 {t.pkLobby.createRoomTitle}</h2>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            <h2 className="text-xl font-bold">{t.pkLobby.createRoomTitle}</h2>
+            <p className="mt-1 text-sm text-game-muted dark:text-game-muted">
               {user && !profileReady
                 ? t.pkLobby.checkingHost
                 : busy === "create"
@@ -483,20 +483,20 @@ export default function PkLobbyPage() {
                 setVipNote("");
                 setVipPrompt(true);
               }}
-              className="self-start px-1 text-xs font-semibold text-zinc-500 underline decoration-zinc-400 underline-offset-4"
+              className="self-start px-1 text-xs font-semibold text-game-muted underline decoration-zinc-400 underline-offset-4"
             >
               本機測試：調整 VIP
             </button>
           ) : null}
           <form
-            className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950"
+            className="rounded-2xl border border-game-line bg-white p-5 dark:border-game-line dark:bg-game-panel"
             onSubmit={(event) => {
               event.preventDefault();
               void joinByCode();
             }}
           >
-            <h2 className="text-xl font-bold">🔑 {t.pkLobby.joinRoomTitle}</h2>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{t.pkLobby.joinRoomDesc}</p>
+            <h2 className="text-xl font-bold">{t.pkLobby.joinRoomTitle}</h2>
+            <p className="mt-1 text-sm text-game-muted dark:text-game-muted">{t.pkLobby.joinRoomDesc}</p>
             <div className="mt-3 flex gap-2">
               <input
                 name="room-code"
@@ -508,12 +508,12 @@ export default function PkLobbyPage() {
                 autoCapitalize="characters"
                 placeholder={t.pkLobby.roomCodePlaceholder}
                 aria-label={t.pkLobby.roomCodePlaceholder}
-                className="h-12 min-w-0 flex-1 rounded-2xl border border-black/10 bg-transparent px-3 text-center text-lg font-black tracking-[0.4em] uppercase outline-none focus:border-zinc-950 dark:border-white/15 dark:focus:border-zinc-50"
+                className="h-12 min-w-0 flex-1 rounded-2xl border border-game-line bg-transparent px-3 text-center text-lg font-black tracking-[0.4em] uppercase outline-none focus:border-zinc-950 dark:border-game-line dark:focus:border-zinc-50"
               />
               <button
                 type="submit"
                 disabled={busy === "join" || busy === "create" || matching}
-                className="h-12 shrink-0 rounded-2xl bg-zinc-950 px-4 text-sm font-semibold text-white disabled:opacity-60 dark:bg-zinc-50 dark:text-zinc-950"
+                className="h-12 shrink-0 rounded-2xl bg-game-accent px-4 text-sm font-semibold text-white disabled:opacity-60  "
               >
                 {t.pkLobby.enterRoomBtn}
               </button>
@@ -529,27 +529,27 @@ export default function PkLobbyPage() {
       ) : null}
 
       {matching ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950 px-6 text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background px-6 text-foreground">
           <div className="flex w-full max-w-sm flex-col items-center text-center">
             <div className="relative grid h-56 w-56 place-items-center" aria-hidden="true">
               <div className="absolute inset-0 rounded-full border border-rose-400/30" />
               <div className="absolute inset-8 rounded-full border border-rose-400/25" />
               <div className="absolute inset-16 rounded-full border border-rose-300/20" />
-              <div className="absolute inset-0 animate-spin rounded-full bg-[conic-gradient(from_0deg,transparent_0_68%,rgba(251,113,133,0.18)_86%,rgba(244,63,94,0.95)_100%)] motion-reduce:animate-none" />
-              <div className="absolute inset-[22%] rounded-full bg-zinc-950" />
-              <div className="relative h-4 w-4 rounded-full bg-rose-400 shadow-[0_0_24px_rgba(251,113,133,0.9)]" />
+              <div className="absolute inset-0 animate-spin rounded-full border-4 border-game-line border-t-game-accent motion-reduce:animate-none" />
+              <div className="absolute inset-[22%] rounded-full bg-background" />
+              <div className="relative h-4 w-4 rounded-full bg-game-accent" />
             </div>
-            <p className="mt-8 text-sm font-semibold tracking-[0.22em] text-rose-300 uppercase">{t.pkLobby.matching}</p>
+            <p className="mt-8 text-sm font-semibold text-game-muted">{t.pkLobby.matching}</p>
             <p aria-live="polite" className="mt-3 text-4xl font-black tabular-nums">
               {fillTemplate(t.pkLobby.searched, { time: formatElapsed(elapsedMs) })}
             </p>
             <p className="mt-3 text-sm text-zinc-300">{t.pkLobby.finding}</p>
-            <p className="mt-1 text-sm text-zinc-400">{t.pkLobby.waitHint}</p>
+            <p className="mt-1 text-sm text-game-muted">{t.pkLobby.waitHint}</p>
             <button
               type="button"
               disabled={summoning}
               onClick={cancelMatch}
-              className="mt-8 h-12 rounded-full border border-white/20 px-6 text-sm font-semibold disabled:opacity-50"
+              className="mt-8 h-12 rounded-xl border border-white/20 px-6 text-sm font-semibold disabled:opacity-50"
             >
               {summoning ? t.pkLobby.startingSoon : t.pkLobby.cancelMatch}
             </button>

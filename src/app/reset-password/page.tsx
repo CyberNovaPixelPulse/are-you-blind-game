@@ -59,7 +59,7 @@ export default function ResetPasswordPage() {
     } finally { setPending(false); }
   }
 
-  const fieldClass = "min-h-11 rounded-xl border border-black/20 bg-transparent px-3 py-2 dark:border-white/25";
+  const fieldClass = "min-h-11 rounded-xl border border-game-line bg-transparent px-3 py-2 dark:border-game-line";
   return (
     <main id="main-content" tabIndex={-1} lang={lang} dir={lang === "ar" ? "rtl" : "ltr"} className="gm-page gm-workspace gm-form-page mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-10">
       <Link href="/create" className="inline-flex min-h-11 w-fit items-center underline underline-offset-4">{copy.back}</Link>
@@ -84,7 +84,7 @@ export default function ResetPasswordPage() {
           </>}
           {error ? <p id="reset-error" role="alert">{copy[error]}</p> : null}
           <p role="status" className="empty:hidden">{pending ? copy.working : sent ? copy.sent : ""}</p>
-          <button type="submit" disabled={pending} className="min-h-11 rounded-full bg-foreground px-4 py-3 font-semibold text-background disabled:opacity-50">
+          <button type="submit" disabled={pending} className="min-h-11 rounded-xl bg-game-accent px-4 py-3 font-semibold text-white disabled:opacity-50">
             {mode === "request" ? copy.send : copy.save}
           </button>
           {mode === "update" ? <button type="button" disabled={pending} onClick={() => { setMode("request"); setPassword(""); setConfirmation(""); setError(null); }} className="min-h-11 underline underline-offset-4">{copy.requestAgain}</button> : null}

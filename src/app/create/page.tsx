@@ -636,21 +636,21 @@ export default function CreatePage() {
             : copy.publish;
 
   return (
-    <div className="flex flex-1 flex-col bg-zinc-50 font-sans text-zinc-950 dark:bg-black dark:text-zinc-50">
+    <div className="flex flex-1 flex-col bg-background font-sans text-zinc-950 dark:text-zinc-50">
       <main id="main-content" tabIndex={-1} className="gm-page gm-workspace gm-form-page mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 py-10 sm:px-6">
         <header className="gm-page-header flex flex-col gap-3">
           <Link
             href="/"
             aria-label={copy.backHome}
-            className="inline-flex min-h-11 w-fit items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] hover:text-zinc-950 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[.08] dark:hover:text-zinc-50"
+            className="inline-flex min-h-11 w-fit items-center gap-1 rounded-xl border border-game-line px-3 text-sm font-medium text-game-muted transition-colors hover:bg-black/[.04] hover:text-zinc-950 dark:border-game-line dark:text-zinc-300 dark:hover:bg-white/[.08] dark:hover:text-zinc-50"
           >
             <span aria-hidden="true">←</span>
             {copy.backHome}
           </Link>
           <div className="flex flex-col gap-2">
             <h1 className="text-3xl">{copy.title}</h1>
-            <p className="max-w-xl text-zinc-600 dark:text-zinc-400">{copy.intro}</p>
-            <label className="flex flex-wrap items-center gap-2 text-sm font-medium text-zinc-500">
+            <p className="max-w-xl text-game-muted dark:text-game-muted">{copy.intro}</p>
+            <label className="flex flex-wrap items-center gap-2 text-sm font-medium text-game-muted">
               {copy.quizLanguage}
               <select
                 disabled={busy || publicationFrozen}
@@ -659,7 +659,7 @@ export default function CreatePage() {
                   const next = event.target.value;
                   if (isLanguageCode(next)) setTargetOverride(next);
                 }}
-                className="min-h-11 rounded-xl border border-black/10 bg-white px-3 font-medium text-zinc-950 outline-none focus:border-zinc-950 dark:border-white/15 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:border-zinc-50"
+                className="min-h-11 rounded-xl border border-game-line bg-white px-3 font-medium text-zinc-950 outline-none focus:border-zinc-950 dark:border-game-line dark:bg-game-panel dark:text-zinc-50 dark:focus:border-zinc-50"
               >
                 {LANGUAGES.map((item) => (
                   <option key={item.code} value={item.code}>
@@ -671,7 +671,7 @@ export default function CreatePage() {
           </div>
         </header>
 
-        <section className="rounded-2xl border border-black/[.08] bg-white p-5 dark:border-white/[.12] dark:bg-zinc-950">
+        <section className="rounded-2xl border border-game-line bg-white p-5 dark:border-game-line dark:bg-game-panel">
           {authReady && user ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm">
@@ -680,16 +680,16 @@ export default function CreatePage() {
               <button
                 type="button"
                 onClick={signOut}
-                className="min-h-11 rounded-full border border-black/10 px-4 text-sm font-medium transition-colors hover:bg-black/[.04] dark:border-white/15 dark:hover:bg-white/[.08]"
+                className="min-h-11 rounded-xl border border-game-line px-4 text-sm font-medium transition-colors hover:bg-black/[.04] dark:border-game-line dark:hover:bg-white/[.08]"
               >
                 {copy.signOut}
               </button>
             </div>
           ) : (
             <form className="flex flex-col gap-3" onSubmit={signIn}>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">{copy.signInHint}</p>
+              <p className="text-sm text-game-muted dark:text-game-muted">{copy.signInHint}</p>
               <div className="flex justify-start"><AuthMenu redirectPath="/create" /></div>
-              <p lang={account.lang} className="text-sm text-zinc-500">{account.text.emailLogin}</p>
+              <p lang={account.lang} className="text-sm text-game-muted">{account.text.emailLogin}</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="flex flex-col gap-1 text-sm font-medium">
                   Email
@@ -701,7 +701,7 @@ export default function CreatePage() {
                     autoComplete="email"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    className="h-11 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus:border-zinc-950 dark:border-white/15 dark:focus:border-zinc-50"
+                    className="h-11 rounded-xl border border-game-line bg-transparent px-3 font-normal outline-none focus:border-zinc-950 dark:border-game-line dark:focus:border-zinc-50"
                   />
                 </label>
                 <label className="flex flex-col gap-1 text-sm font-medium">
@@ -713,7 +713,7 @@ export default function CreatePage() {
                     autoComplete="current-password"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
-                    className="h-11 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus:border-zinc-950 dark:border-white/15 dark:focus:border-zinc-50"
+                    className="h-11 rounded-xl border border-game-line bg-transparent px-3 font-normal outline-none focus:border-zinc-950 dark:border-game-line dark:focus:border-zinc-50"
                   />
                 </label>
               </div>
@@ -721,7 +721,7 @@ export default function CreatePage() {
                 <button
                   type="submit"
                   disabled={!authReady || authPending}
-                  className="min-h-11 rounded-full bg-foreground px-4 text-sm font-medium text-background disabled:opacity-50"
+                  className="min-h-11 rounded-xl bg-game-accent px-4 text-sm font-medium text-white disabled:opacity-50"
                 >
                   {t("login")}
                 </button>
@@ -729,7 +729,7 @@ export default function CreatePage() {
                   type="button"
                   disabled={!authReady || authPending}
                   onClick={signUp}
-                  className="min-h-11 rounded-full border border-black/10 px-4 text-sm font-medium disabled:opacity-50 dark:border-white/15"
+                  className="min-h-11 rounded-xl border border-game-line px-4 text-sm font-medium disabled:opacity-50 dark:border-game-line"
                 >
                   {copy.signUp}
                 </button>
@@ -745,12 +745,12 @@ export default function CreatePage() {
             </p>
           ) : null}
           {authMessage ? (
-            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">{authMessage}</p>
+            <p className="mt-3 text-sm text-game-muted dark:text-game-muted">{authMessage}</p>
           ) : null}
         </section>
 
         {result ? (
-          <section className="rounded-2xl border border-black/[.08] bg-white p-5 dark:border-white/[.12] dark:bg-zinc-950">
+          <section className="rounded-2xl border border-game-line bg-white p-5 dark:border-game-line dark:bg-game-panel">
             <h2 className="text-xl font-semibold">{copy.published}</h2>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span
@@ -761,12 +761,12 @@ export default function CreatePage() {
               <button
                 type="button"
                 onClick={() => setScoreOpen(true)}
-                className="min-h-11 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-black/[.04] dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[.08]"
+                className="min-h-11 rounded-xl border border-game-line px-3 text-sm font-medium text-game-muted transition-colors hover:bg-black/[.04] dark:border-game-line dark:text-zinc-300 dark:hover:bg-white/[.08]"
               >
                 {copy.viewScore}
               </button>
             </div>
-            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="mt-3 text-sm text-game-muted dark:text-game-muted">
               {fillTemplate(copy.sizeLine, {
                 crop: formatKb(result.cropBytes),
                 original: formatKb(result.originalBytes),
@@ -781,7 +781,7 @@ export default function CreatePage() {
                   alt={copy.cropAlt}
                   className="aspect-square w-full rounded-2xl object-cover"
                 />
-                <figcaption className="text-sm text-zinc-500">{copy.cropCaption}</figcaption>
+                <figcaption className="text-sm text-game-muted">{copy.cropCaption}</figcaption>
               </figure>
               <figure className="flex flex-col gap-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -790,7 +790,7 @@ export default function CreatePage() {
                   alt={copy.originalAlt}
                   className="aspect-square w-full rounded-2xl object-cover"
                 />
-                <figcaption className="text-sm text-zinc-500">{copy.originalCaption}</figcaption>
+                <figcaption className="text-sm text-game-muted">{copy.originalCaption}</figcaption>
               </figure>
             </div>
             <button
@@ -800,7 +800,7 @@ export default function CreatePage() {
                 setResult(null);
                 publicationRef.current=null;setPublicationFrozen(false);setPublicationStatus(null);
               }}
-              className="mt-4 min-h-11 rounded-full bg-foreground px-4 text-sm font-medium text-background"
+              className="mt-4 min-h-11 rounded-xl bg-game-accent px-4 text-sm font-medium text-white"
             >
               {copy.another}
             </button>
@@ -812,27 +812,27 @@ export default function CreatePage() {
             <Modal
               onDismiss={() => setScoreOpen(false)}
               aria-labelledby="score-detail-title"
-              className="overscroll-contain flex max-h-[85vh] w-full max-w-lg flex-col gap-4 overflow-y-auto rounded-2xl bg-white p-5 text-zinc-950 shadow-xl dark:bg-zinc-950 dark:text-zinc-50"
+              className="overscroll-contain flex max-h-[85vh] w-full max-w-lg flex-col gap-4 overflow-y-auto rounded-2xl bg-white p-5 text-zinc-950  dark:bg-game-panel dark:text-zinc-50"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 id="score-detail-title" className="text-xl font-semibold">
                     {copy.scoreTitle}
                   </h2>
-                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                  <p className="mt-1 text-sm text-game-muted dark:text-game-muted">
                     {scoreBadgeText(result.qualityScore, copy)}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setScoreOpen(false)}
-                  className="min-h-11 rounded-full px-3 text-sm font-medium text-zinc-500 hover:bg-black/[.04] dark:hover:bg-white/[.08]"
+                  className="min-h-11 rounded-xl px-3 text-sm font-medium text-game-muted hover:bg-black/[.04] dark:hover:bg-white/[.08]"
                 >
                   {copy.close}
                 </button>
               </div>
               <ul className="flex flex-col gap-3">
-                <li className="rounded-2xl border border-black/10 px-4 py-3 dark:border-white/15">
+                <li className="rounded-2xl border border-game-line px-4 py-3 dark:border-game-line">
                   <p className="text-sm font-semibold">
                     {copy.blindSolve} {result.breakdown.blind_guess.score}/40
                   </p>
@@ -845,7 +845,7 @@ export default function CreatePage() {
                     ))}
                   </ol>
                 </li>
-                <li className="rounded-2xl border border-black/10 px-4 py-3 dark:border-white/15">
+                <li className="rounded-2xl border border-game-line px-4 py-3 dark:border-game-line">
                   <p className="text-sm font-semibold">
                     {copy.visualRich} {result.breakdown.visual_richness.score}/25
                   </p>
@@ -853,7 +853,7 @@ export default function CreatePage() {
                     {result.breakdown.visual_richness.detail || copy.noVisual}
                   </p>
                 </li>
-                <li className="rounded-2xl border border-black/10 px-4 py-3 dark:border-white/15">
+                <li className="rounded-2xl border border-game-line px-4 py-3 dark:border-game-line">
                   <p className="text-sm font-semibold">
                     {copy.distractorQuality} {result.breakdown.distractor_deception.score}/20
                   </p>
@@ -861,7 +861,7 @@ export default function CreatePage() {
                     {result.breakdown.distractor_deception.detail || copy.noDistractor}
                   </p>
                 </li>
-                <li className="rounded-2xl border border-black/10 px-4 py-3 dark:border-white/15">
+                <li className="rounded-2xl border border-game-line px-4 py-3 dark:border-game-line">
                   <p className="text-sm font-semibold">
                     {copy.community} {result.breakdown.safety.score}/15 ·{" "}
                     {result.breakdown.safety.violated ? copy.failedCheck : copy.passed}
@@ -914,7 +914,7 @@ export default function CreatePage() {
                 writeStoredAuthorName(event.target.value);
               }}
               placeholder={copy.authorPlaceholder}
-              className="h-11 rounded-xl border border-black/10 bg-white px-3 font-normal outline-none focus:border-zinc-950 dark:border-white/15 dark:bg-zinc-950 dark:focus:border-zinc-50"
+              className="h-11 rounded-xl border border-game-line bg-white px-3 font-normal outline-none focus:border-zinc-950 dark:border-game-line dark:bg-game-panel dark:focus:border-zinc-50"
             />
           </label>
           {fieldError("author-name")}
@@ -922,9 +922,9 @@ export default function CreatePage() {
           <section className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <h2 className="text-lg font-semibold">{copy.imageTitle}</h2>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">{copy.imageHint}</p>
+              <p className="text-sm text-game-muted dark:text-game-muted">{copy.imageHint}</p>
             </div>
-            <label className="focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-zinc-500 flex h-12 w-fit cursor-pointer items-center rounded-full border border-black/10 px-5 text-sm font-medium transition-colors hover:bg-black/[.04] dark:border-white/15 dark:hover:bg-white/[.08]">
+            <label className="focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-zinc-500 flex h-12 w-fit cursor-pointer items-center rounded-full border border-game-line px-5 text-sm font-medium transition-colors hover:bg-black/[.04] dark:border-game-line dark:hover:bg-white/[.08]">
               {copy.pickImage}
               <input
                 type="file"
@@ -939,7 +939,7 @@ export default function CreatePage() {
             </label>
             {fieldError("quiz-image")}
             {sourceFile ? (
-              <p className="text-sm text-zinc-500">{sourceFile.name}</p>
+              <p className="text-sm text-game-muted">{sourceFile.name}</p>
             ) : null}
             {imageUrl ? (
               <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
@@ -972,7 +972,7 @@ export default function CreatePage() {
                     alt={copy.originalPreviewAlt}
                     className="aspect-square w-full rounded-2xl object-cover"
                   />
-                  <figcaption className="text-sm text-zinc-500">
+                  <figcaption className="text-sm text-game-muted">
                     {copy.originalReveal}
                   </figcaption>
                 </figure>
@@ -996,13 +996,13 @@ export default function CreatePage() {
 
           <fieldset className="flex flex-col gap-4">
             <legend className="text-lg font-semibold">{copy.optionsTitle}</legend>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">{copy.optionsHint}</p>
+            <p className="text-sm text-game-muted dark:text-game-muted">{copy.optionsHint}</p>
             <div className="flex flex-col items-start gap-2">
               <button
                 type="button"
                 disabled={aiPending}
                 onClick={() => void generateDistractors()}
-                className="h-11 rounded-full border border-black/10 px-4 text-sm font-semibold disabled:opacity-50 dark:border-white/15"
+                className="h-11 rounded-xl border border-game-line px-4 text-sm font-semibold disabled:opacity-50 dark:border-game-line"
               >
                 {aiPending ? copy.aiPending : copy.aiButton}
               </button>
@@ -1015,7 +1015,7 @@ export default function CreatePage() {
             {options.map((option, index) => (
               <div
                 key={index}
-                className="flex flex-col gap-3 rounded-2xl border border-black/[.08] bg-white p-4 dark:border-white/[.12] dark:bg-zinc-950"
+                className="flex flex-col gap-3 rounded-2xl border border-game-line bg-white p-4 dark:border-game-line dark:bg-game-panel"
               >
                 <label className="flex items-center gap-2 text-sm font-medium">
                   <input
@@ -1037,7 +1037,7 @@ export default function CreatePage() {
                     onChange={(event) =>
                       updateOption(index, { optionText: event.target.value })
                     }
-                    className="h-11 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus:border-zinc-950 dark:border-white/15 dark:focus:border-zinc-50"
+                    className="h-11 rounded-xl border border-game-line bg-transparent px-3 font-normal outline-none focus:border-zinc-950 dark:border-game-line dark:focus:border-zinc-50"
                   />
                 </label>
                 {fieldError(`option-text-${index}`)}
@@ -1050,7 +1050,7 @@ export default function CreatePage() {
                     onChange={(event) =>
                       updateOption(index, { tauntText: event.target.value })
                     }
-                    className="h-11 rounded-xl border border-black/10 bg-transparent px-3 font-normal outline-none focus:border-zinc-950 dark:border-white/15 dark:focus:border-zinc-50"
+                    className="h-11 rounded-xl border border-game-line bg-transparent px-3 font-normal outline-none focus:border-zinc-950 dark:border-game-line dark:focus:border-zinc-50"
                   />
                 </label>
                 {fieldError(`option-taunt-${index}`)}
@@ -1067,7 +1067,7 @@ export default function CreatePage() {
           <button
             type="submit"
             disabled={pending}
-            className="h-12 rounded-full bg-foreground px-5 text-base font-medium text-background disabled:opacity-50"
+            className="h-12 rounded-xl bg-game-accent px-5 text-base font-medium text-white disabled:opacity-50"
           >
             {phaseLabel}
           </button>
@@ -1079,20 +1079,20 @@ export default function CreatePage() {
           <Modal
             onDismiss={() => setModerationReport(null)}
             aria-labelledby="moderation-title"
-            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain flex w-full max-w-lg flex-col gap-4 rounded-2xl bg-white p-5 text-zinc-950 shadow-xl dark:bg-zinc-950 dark:text-zinc-50"
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain flex w-full max-w-lg flex-col gap-4 rounded-2xl bg-white p-5 text-zinc-950  dark:bg-game-panel dark:text-zinc-50"
           >
             <div className="flex flex-col gap-1">
               <h2 id="moderation-title" className="text-xl font-semibold">
                 {copy.moderationTitle}
               </h2>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              <p className="text-sm text-game-muted dark:text-game-muted">
                 {moderationReport.breakdown.safety.violated
                   ? copy.safetyZero
                   : fillTemplate(copy.scoreLow, { score: moderationReport.qualityScore })}{" "}
                 {copy.adjustHint}
               </p>
             </div>
-            <div className="rounded-2xl border border-black/10 px-4 py-3 dark:border-white/15">
+            <div className="rounded-2xl border border-game-line px-4 py-3 dark:border-game-line">
               <p className="text-sm font-semibold">{copy.blindResult}</p>
               <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
                 {moderationReport.guesses.map((guess, index) => (
@@ -1129,13 +1129,13 @@ export default function CreatePage() {
             <button
               type="button"
               onClick={() => setModerationReport(null)}
-              className="h-11 rounded-full bg-foreground px-4 text-sm font-medium text-background"
+              className="h-11 rounded-xl bg-game-accent px-4 text-sm font-medium text-white"
             >
               {copy.backAdjust}
             </button>
             <Link
               href="/guidelines"
-              className="text-center text-xs text-zinc-400 transition-colors hover:text-zinc-500 dark:text-zinc-500 dark:hover:text-zinc-400"
+              className="text-center text-xs text-game-muted transition-colors hover:text-game-muted dark:text-game-muted dark:hover:text-game-muted"
             >
               {copy.guidelines}
             </Link>

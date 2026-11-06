@@ -89,8 +89,8 @@ function PkScoreboard({
             key={player.user_id}
             className={
               compact
-                ? "min-w-0 flex-1 rounded-xl border border-black/10 px-2 py-1 dark:border-white/15"
-                : "rounded-2xl border border-black/10 px-3 py-2 dark:border-white/15"
+                ? "min-w-0 flex-1 rounded-xl border border-game-line px-2 py-1 dark:border-game-line"
+                : "rounded-2xl border border-game-line px-3 py-2 dark:border-game-line"
             }
           >
             <div className="flex items-center gap-2">
@@ -107,7 +107,7 @@ function PkScoreboard({
                 </div>
                 <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                   <div
-                    className="h-full rounded-full bg-rose-500 transition-[width] duration-500"
+                    className="h-full rounded-full bg-game-accent transition-[width] duration-500"
                     style={{ width: `${width}%` }}
                   />
                 </div>
@@ -558,23 +558,23 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
     <main id="main-content" tabIndex={-1}
       className={
         inBattle && current
-          ? "gm-page gm-game mx-auto flex min-h-[100dvh] w-full max-w-md flex-col p-3"
+          ? "gm-page gm-game mx-auto flex min-h-[100dvh] w-full max-w-md flex-col p-3 md:max-w-5xl"
           : "gm-page gm-game mx-auto flex min-h-screen w-full max-w-md flex-col gap-6 px-4 py-8"
       }
     >
       {unsyncedCount > 0 ? <p role="status">已作答紀錄尚未同步，遊戲結果已保留。</p> : null}
       {notice && inBattle ? <p role="alert" className="text-sm text-amber-700">{notice}</p> : null}
       {answerFailure === "retryable" && submissionRef.current ? (
-        <button type="button" onClick={() => void answer(submissionRef.current!.option)} className="rounded-full bg-rose-500 p-3 text-white">重試答案</button>
+        <button type="button" onClick={() => void answer(submissionRef.current!.option)} className="rounded-xl bg-game-accent p-3 text-white">重試答案</button>
       ) : null}
       {answerFailure === "unavailable" ? (
-        <button type="button" onClick={() => void leaveRoom()} className="rounded-full bg-rose-500 p-3 text-white">離開房間</button>
+        <button type="button" onClick={() => void leaveRoom()} className="rounded-xl bg-game-accent p-3 text-white">離開房間</button>
       ) : null}
       <div className="flex shrink-0 items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => void leaveRoom()}
-          className="inline-flex h-9 items-center gap-1 rounded-full border border-black/10 px-3 text-sm font-medium text-zinc-600 dark:border-white/15 dark:text-zinc-300"
+          className="inline-flex h-9 items-center gap-1 rounded-xl border border-game-line px-3 text-sm font-medium text-game-muted dark:border-game-line dark:text-zinc-300"
         >
           <span aria-hidden="true">←</span>
           回到大廳
@@ -586,15 +586,15 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
         )}
       </div>
 
-      {!ready || phase === "loading" ? <p className="text-sm text-zinc-500">正在進入房間…</p> : null}
+      {!ready || phase === "loading" ? <p className="text-sm text-game-muted">正在進入房間…</p> : null}
 
       {phase === "login" ? (
-        <section className="rounded-3xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950">
+        <section className="rounded-2xl border border-game-line bg-white p-5 dark:border-game-line dark:bg-game-panel">
           <p className="font-medium">登入 Google 之後才能加入這間 PK 房。</p>
           <button
             type="button"
             onClick={() => void signIn()}
-            className="mt-4 h-12 w-full rounded-full bg-zinc-950 text-sm font-semibold text-white dark:bg-zinc-50 dark:text-zinc-950"
+            className="mt-4 h-12 w-full rounded-xl bg-game-accent text-sm font-semibold text-white  "
           >
             使用 Google 登入
           </button>
@@ -602,9 +602,9 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
       ) : null}
 
       {phase === "missing" ? (
-        <section className="rounded-3xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950">
+        <section className="rounded-2xl border border-game-line bg-white p-5 dark:border-game-line dark:bg-game-panel">
           <h1 className="text-xl font-bold">找不到這個房間</h1>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{notice || "房號可能打錯了。"}</p>
+          <p className="mt-2 text-sm text-game-muted dark:text-game-muted">{notice || "房號可能打錯了。"}</p>
           <Link href="/pk" className="mt-4 inline-flex h-11 items-center text-sm font-semibold">
             回 PK 大廳
           </Link>
@@ -612,7 +612,7 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
       ) : null}
 
       {phase === "blocked" ? (
-        <section className="rounded-3xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950">
+        <section className="rounded-2xl border border-game-line bg-white p-5 dark:border-game-line dark:bg-game-panel">
           <h1 className="text-xl font-bold">{notice || "現在進不去"}</h1>
           <Link href="/pk" className="mt-4 inline-flex h-11 items-center text-sm font-semibold">
             回 PK 大廳
@@ -624,7 +624,7 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
         <section className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
           <p className="text-sm font-semibold tracking-[0.2em] text-rose-500 uppercase">Ready</p>
           <p className="text-8xl font-black tabular-nums">{countLeft}</p>
-          <p className="text-sm text-zinc-500">全員同步倒數，結束後進入猜題</p>
+          <p className="text-sm text-game-muted">全員同步倒數，結束後進入猜題</p>
         </section>
       ) : null}
 
@@ -639,7 +639,7 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
             ) : (
               <h1 className="mt-1 text-3xl font-black tracking-[0.28em]">{room.room_code}</h1>
             )}
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="mt-2 text-sm text-game-muted dark:text-game-muted">
               {room.mode === "random"
                 ? "正在尋找實力相當的對手..."
                 : `已加入 ${players.length} / ${room.max_players} 人。滿 2 人後由房長開賽。`}
@@ -649,7 +649,7 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
             {players.map((player) => (
               <li
                 key={player.user_id}
-                className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white px-3 py-2 dark:border-white/15 dark:bg-zinc-950"
+                className="flex items-center gap-3 rounded-2xl border border-game-line bg-white px-3 py-2 dark:border-game-line dark:bg-game-panel"
               >
                 <PlayerFace player={player} />
                 <span className="min-w-0 flex-1 truncate font-semibold">{player.username}</span>
@@ -666,7 +666,7 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
               type="button"
               disabled={addingBot}
               onClick={() => void addVirtualPlayer()}
-              className="h-11 rounded-full border border-black/10 text-sm font-semibold disabled:opacity-60 dark:border-white/15"
+              className="h-11 rounded-xl border border-game-line text-sm font-semibold disabled:opacity-60 dark:border-game-line"
             >
               {addingBot ? "正在加入…" : "補一位對手"}
             </button>
@@ -676,43 +676,43 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
               type="button"
               disabled={starting}
               onClick={() => void beginBattle()}
-              className="h-14 rounded-full bg-rose-500 text-base font-bold text-white disabled:opacity-60"
+              className="h-14 rounded-xl bg-game-accent text-base font-bold text-white disabled:opacity-60"
             >
               {starting ? "正在抽題…" : "開始對戰"}
             </button>
           ) : null}
           {room.mode === "private" && host && players.length < 2 ? (
-            <p className="text-sm text-zinc-500">還要再等一位玩家。補上一位對手後就能開始對戰。</p>
+            <p className="text-sm text-game-muted">還要再等一位玩家。補上一位對手後就能開始對戰。</p>
           ) : null}
           {notice ? <p className="text-sm text-amber-700 dark:text-amber-300">{notice}</p> : null}
         </section>
       ) : null}
 
       {phase === "room" && inBattle ? (
-        <section className="flex flex-1 flex-col items-center justify-center gap-3 py-3">
+        <section className="game-pk-stage flex flex-1 flex-col items-center justify-center gap-3 py-3">
           <header className="flex w-full shrink-0 items-center justify-between gap-3">
             <h1 className="text-base font-black">PK 猜題</h1>
-            <p className="text-sm font-semibold text-zinc-500">
+            <p className="text-sm font-semibold text-game-muted">
               {questions.length === 0 ? "載入題目" : `${Math.min(questionIndex + 1, questions.length)} / ${questions.length}`}
             </p>
           </header>
           {current ? (
             <>
               <PkScoreboard players={boardPlayers} total={questionTotal} compact />
-              <p className="truncate text-xs text-zinc-500">{current.author_name}</p>
-              <div className="relative mx-auto aspect-square w-[min(100%,280px,calc(100dvh-420px))] max-w-[280px] shrink-0 overflow-hidden rounded-2xl shadow-2xl sm:w-[min(100%,320px,calc(100dvh-420px))] sm:max-w-[320px]">
+              <p className="truncate text-xs text-game-muted">{current.author_name}</p>
+              <div className="game-question-image relative mx-auto aspect-square w-[min(100%,280px,calc(100dvh-420px))] max-w-[280px] shrink-0 overflow-hidden rounded-2xl  sm:w-[min(100%,320px,calc(100dvh-420px))] sm:max-w-[320px]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={publicImageUrl(current.crop_image_path)} alt="這題的特寫" className="absolute inset-0 h-full w-full object-cover" />
               </div>
-              <div className="grid w-full max-w-[280px] shrink-0 grid-cols-1 gap-3 sm:max-w-[320px]">
+              <div className="game-question-answers grid w-full max-w-[280px] shrink-0 grid-cols-1 gap-3 sm:max-w-[320px]">
                 {current.options.map((option) => {
                   const selected = pickedId === option.id;
                   const revealed = pickedId !== null;
                   const tone = revealed && option.id === correctOptionId
-                    ? "border-emerald-500 bg-emerald-500 text-white"
+                    ? "border-emerald-500 bg-emerald-700 text-white"
                     : revealed && selected
-                      ? "animate-quiz-shake border-red-500 bg-red-500 text-white"
-                      : "border-black/10 bg-white dark:border-white/15 dark:bg-zinc-950";
+                      ? "animate-quiz-shake border-red-500 bg-red-700 text-white"
+                      : "border-game-line bg-white dark:border-game-line dark:bg-game-panel";
                   return (
                     <button
                       key={option.id}
@@ -730,9 +730,9 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
               </div>
             </>
           ) : questionIndex >= questions.length && questions.length > 0 ? (
-            <div className="rounded-3xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-950">
+            <div className="rounded-2xl border border-game-line bg-white p-5 dark:border-game-line dark:bg-game-panel">
               <h2 className="text-2xl font-black">{botsStillPlaying ? "結算中" : "最終排名"}</h2>
-              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              <p className="mt-2 text-sm text-game-muted dark:text-game-muted">
                 {botsStillPlaying ? "對手正在全力衝刺作答中..." : "5 題都猜完了，名次依得分排列。"}
               </p>
               <div className="mt-4">
@@ -740,13 +740,13 @@ export function PkRoom({ roomCode }: { roomCode: string }) {
               </div>
               <Link
                 href="/pk"
-                className="mt-4 flex h-12 items-center justify-center rounded-full bg-rose-500 text-sm font-bold text-white"
+                className="mt-4 flex h-12 items-center justify-center rounded-xl bg-game-accent text-sm font-bold text-white"
               >
                 回 PK 大廳
               </Link>
             </div>
           ) : (
-            <p className="text-sm text-zinc-500">正在把對戰題目送進畫面…</p>
+            <p className="text-sm text-game-muted">正在把對戰題目送進畫面…</p>
           )}
         </section>
       ) : null}

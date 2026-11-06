@@ -26,42 +26,26 @@ export function PlayerAvatar({
 }
 
 function goldRing(size: string) {
-  return `animate-ladder-gold inline-flex rounded-full bg-[linear-gradient(120deg,#f59e0b,#fff7d6,#fbbf24,#b45309,#fde68a,#f59e0b)] bg-[length:220%_220%] p-[3px] shadow-[0_0_18px_rgba(251,191,36,0.75)] ${size}`;
+  return `inline-flex rounded-full bg-game-accent p-[3px] ${size}`;
 }
 
 function PodiumCard({ entry }: { entry: LeaderboardEntry }) {
-  const styles =
-    entry.rank === 1
-      ? {
-          shell: "border-amber-300/70 bg-gradient-to-b from-amber-300/20 to-zinc-950 shadow-[0_0_28px_rgba(251,191,36,0.35)] sm:-translate-y-4",
-          name: "text-amber-200 drop-shadow-[0_0_8px_rgba(251,191,36,0.85)]",
-          ring: goldRing(""),
-          label: "冠軍",
-        }
-      : entry.rank === 2
-        ? {
-            shell: "border-zinc-200/70 bg-gradient-to-b from-zinc-100/15 to-zinc-950",
-            name: "text-zinc-100",
-            ring: "inline-flex rounded-full bg-gradient-to-br from-white to-zinc-400 p-[3px]",
-            label: "亞軍",
-          }
-        : {
-            shell: "border-amber-700/80 bg-gradient-to-b from-amber-800/30 to-zinc-950",
-            name: "text-amber-100",
-            ring: "inline-flex rounded-full bg-gradient-to-br from-amber-200 to-amber-800 p-[3px]",
-            label: "季軍",
-          };
+  const styles = {
+    shell: entry.rank === 1 ? "border-game-accent bg-game-selected" : "border-game-line bg-game-panel",
+    name: "text-foreground",
+    ring: entry.rank === 1 ? goldRing("") : "inline-flex rounded-full bg-zinc-200 p-[3px]",
+    label: entry.rank === 1 ? "冠軍" : entry.rank === 2 ? "亞軍" : "季軍",
+  };
 
   return (
-    <article className={`flex flex-col items-center gap-2 rounded-3xl border px-3 py-4 text-center ${styles.shell}`}>
-      <p className="text-xs font-semibold tracking-[0.16em] text-zinc-400 uppercase">{styles.label}</p>
+    <article className={`flex flex-col items-center gap-2 rounded-2xl border px-3 py-4 text-center ${styles.shell}`}>
+      <p className="text-xs font-semibold  text-game-muted ">{styles.label}</p>
       <div className="relative">
-        {entry.rank === 1 ? <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-xl">👑</span> : null}
         <PlayerAvatar name={entry.username} src={entry.avatar_url} className="h-16 w-16 text-xl" ring={styles.ring} />
       </div>
       <p className={`max-w-full truncate text-base font-black ${styles.name}`}>{entry.username}</p>
-      <p className="text-sm font-semibold text-white">{rankMark(entry.rank)} {entry.total_score.toLocaleString("zh-TW")}</p>
-      <p className="text-xs text-zinc-400">🔥 {entry.streak_count}</p>
+      <p className="text-sm font-semibold text-foreground">{rankMark(entry.rank)} {entry.total_score.toLocaleString("zh-TW")}</p>
+      <p className="text-xs text-game-muted">🔥 {entry.streak_count}</p>
     </article>
   );
 }
@@ -70,13 +54,13 @@ function RankLine({ entry, mine }: { entry: LeaderboardEntry; mine: boolean }) {
   return (
     <li
       className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 ${
-        mine ? "bg-amber-300/15 ring-1 ring-amber-300/60" : "bg-white/5"
+        mine ? "bg-game-selected ring-1 ring-game-accent" : "bg-game-panel"
       }`}
     >
-      <span className="w-8 text-sm font-bold text-zinc-400">{entry.rank}</span>
+      <span className="w-8 text-sm font-bold text-game-muted">{entry.rank}</span>
       <PlayerAvatar name={entry.username} src={entry.avatar_url} className="h-9 w-9 text-sm" />
       <span className="min-w-0 flex-1 truncate text-sm font-medium">{entry.username}</span>
-      <span className="text-xs text-amber-200">🔥 {entry.streak_count}</span>
+      <span className="text-xs text-foreground">🔥 {entry.streak_count}</span>
       <span className="w-20 text-right text-sm font-semibold">{entry.total_score.toLocaleString("zh-TW")}</span>
     </li>
   );
@@ -120,7 +104,7 @@ export function LeaderboardModal({
     <dialog
       ref={dialogRef}
       aria-labelledby="ladder-title"
-      className="fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none border-0 bg-zinc-950 p-0 text-zinc-50"
+      className="fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none border-0 bg-game-panel p-0 text-foreground"
       onCancel={(event) => { event.preventDefault(); onClose(); }}
       onKeyDown={(event) => {
         if (event.key !== "Tab") return;
@@ -140,7 +124,6 @@ export function LeaderboardModal({
       >
         <header className="flex items-center justify-between gap-3 px-4 py-4">
           <div>
-            <p className="text-xs font-semibold tracking-[0.22em] text-amber-300 uppercase">Global Ladder</p>
             <h2 id="ladder-title" className="text-2xl font-black">
               全服天梯榜
             </h2>
@@ -148,7 +131,7 @@ export function LeaderboardModal({
           <button
             type="button"
             onClick={onClose}
-            className="h-11 min-w-11 rounded-full border border-white/15 px-4 text-sm font-medium"
+            className="h-11 min-w-11 rounded-xl border border-game-line px-4 text-sm font-medium"
           >
             關閉
           </button>
@@ -156,11 +139,11 @@ export function LeaderboardModal({
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
           {unavailable ? (
-            <p className="rounded-2xl border border-white/10 px-4 py-8 text-center text-sm text-zinc-400">
+            <p className="rounded-2xl border border-game-line px-4 py-8 text-center text-sm text-game-muted">
               排行榜資料表還沒建立，分數會先留在這一局。
             </p>
           ) : entries.length === 0 ? (
-            <p className="rounded-2xl border border-white/10 px-4 py-8 text-center text-sm text-zinc-400">
+            <p className="rounded-2xl border border-game-line px-4 py-8 text-center text-sm text-game-muted">
               還沒有成績。打完一局挑戰就會出現在這裡。
             </p>
           ) : (
@@ -183,24 +166,24 @@ export function LeaderboardModal({
           )}
         </div>
 
-        <footer className="border-t border-amber-300/30 bg-zinc-950/95 px-4 py-3 shadow-[0_-12px_30px_rgba(0,0,0,0.45)]">
+        <footer className="border-t border-game-line bg-game-panel px-4 py-3 ">
           {unavailable ? (
-            <p className="text-sm font-medium text-amber-100">我的當前名次　排行榜尚未就緒</p>
+            <p className="text-sm font-medium text-foreground">我的當前名次　排行榜尚未就緒</p>
           ) : !loggedIn ? (
-            <p className="text-sm font-medium text-amber-100">登入後就能在這裡看到我的當前名次。</p>
+            <p className="text-sm font-medium text-foreground">登入後就能在這裡看到我的當前名次。</p>
           ) : !me ? (
-            <p className="text-sm font-medium text-amber-100">我的當前名次　尚未進入挑戰榜</p>
+            <p className="text-sm font-medium text-foreground">我的當前名次　尚未進入挑戰榜</p>
           ) : (
             <div className="flex items-center gap-3">
               <PlayerAvatar name={me.username} src={me.avatar_url} className="h-10 w-10" />
               <div className="min-w-0 flex-1">
-                <p className="text-xs text-amber-200/80">我的當前名次</p>
-                <p className="truncate text-base font-black text-amber-100">
+                <p className="text-xs text-foreground/80">我的當前名次</p>
+                <p className="truncate text-base font-black text-foreground">
                   {me.rank <= 3 ? `👑 第 ${me.rank} 名` : `#${me.rank}`}
                   <span className="ml-2 font-semibold">⚡ {me.total_score.toLocaleString("zh-TW")} 分</span>
                 </p>
               </div>
-              <p className="text-sm font-semibold text-amber-200">🔥 {me.streak_count}</p>
+              <p className="text-sm font-semibold text-foreground">🔥 {me.streak_count}</p>
             </div>
           )}
         </footer>
